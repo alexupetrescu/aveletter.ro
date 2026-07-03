@@ -1,0 +1,20 @@
+# Python
+backend/venv/
+__pycache__/
+*.pyc
+backend/.env
+backend/staticfiles/
+backend/media/
+
+# Node / Next
+frontend/node_modules/
+frontend/.next/
+frontend/.env.local
+
+# Misc
+*.log
+.DS_Store
+
+docker-compose.dev.yml
+
+daily-dev.commands.md
