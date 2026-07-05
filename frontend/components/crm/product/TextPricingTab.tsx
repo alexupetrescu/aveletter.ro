@@ -45,8 +45,12 @@ export default function TextPricingTab({
   const [draft, setDraft] = useState<Draft>({});
 
   useEffect(() => {
-    if (existing) setDraft({ pricing_mode: "per_page", ...existing });
-    else
+    if (existing) {
+      setDraft({
+        ...existing,
+        pricing_mode: existing.pricing_mode ?? "per_page",
+      });
+    } else
       setDraft({
         text_field_key: inputFields.find((f) => f.field_type === "long_text")?.key ?? "",
         pricing_mode: "per_page",
