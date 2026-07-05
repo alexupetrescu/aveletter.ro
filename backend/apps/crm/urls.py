@@ -37,6 +37,7 @@ urlpatterns = [
     path("auth/me/", MeView.as_view(), name="crm-me"),
     path("tax-config/", views.TaxConfigView.as_view(), name="crm-tax-config"),
     path("site-config/", views.SiteConfigCrmView.as_view(), name="crm-site-config"),
+    path("home-hero/", views.HomeHeroCrmView.as_view(), name="crm-home-hero"),
     path("stats/", views.StatsView.as_view(), name="crm-stats"),
     path("", include(router.urls)),
 ]

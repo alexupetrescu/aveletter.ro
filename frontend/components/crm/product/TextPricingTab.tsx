@@ -21,6 +21,12 @@ import {
 
 type Draft = Partial<CrmTextPricing>;
 
+const PRICING_MODES = [
+  { value: "per_page", label: "Pe pagină (prima pagină = preț de bază)" },
+  { value: "per_word", label: "Pe cuvânt" },
+  { value: "per_character", label: "Pe caracter" },
+] as const;
+
 export default function TextPricingTab({
   productId,
   inputFields,
@@ -39,11 +45,13 @@ export default function TextPricingTab({
   const [draft, setDraft] = useState<Draft>({});
 
   useEffect(() => {
-    if (existing) setDraft(existing);
+    if (existing) setDraft({ pricing_mode: "per_page", ...existing });
     else
       setDraft({
         text_field_key: inputFields.find((f) => f.field_type === "long_text")?.key ?? "",
+        pricing_mode: "per_page",
         words_per_page: 100,
+        price_per_unit_amount: 0,
         minimum_pages: 1,
         setup_fee_amount: 0,
         round_up: true,
@@ -55,6 +63,7 @@ export default function TextPricingTab({
   const textFields = inputFields.filter(
     (f) => f.field_type === "long_text" || f.field_type === "short_text",
   );
+  const mode = draft.pricing_mode ?? "per_page";
 
   function save() {
     const body = { ...draft, product: productId };
@@ -69,17 +78,17 @@ export default function TextPricingTab({
   if (isLoading) return <p className="text-muted text-sm">Se încarcă…</p>;
 
   return (
-    <Card title="Preț calculat pe pagină (texte, jurăminte, scrisori)">
+    <Card title="Preț text — pe pagină, cuvânt sau caracter">
       {textFields.length === 0 ? (
         <p className="text-sm text-muted">
           Adaugă mai întâi un câmp de tip „Text lung" în tabul „Câmpuri client" —
-          prețul pe pagină se calculează din textul introdus de client.
+          prețul se calculează din textul introdus de client.
         </p>
       ) : (
         <div className="space-y-4 max-w-2xl">
           <Field
             label="Câmpul cu textul tarifat"
-            hint="Câmpul de personalizare din care se numără cuvintele."
+            hint="Câmpul de personalizare din care se numără cuvintele/caracterele."
           >
             <Select
               value={draft.text_field_key ?? ""}
@@ -93,19 +102,53 @@ export default function TextPricingTab({
               ))}
             </Select>
           </Field>
+          <Field
+            label="Mod de tarifare"
+            hint="Pe pagină: prima pagină = preț de bază; paginile suplimentare se tarifează separat."
+          >
+            <Select
+              value={mode}
+              onChange={(e) =>
+                patch({
+                  pricing_mode: e.target.value as CrmTextPricing["pricing_mode"],
+                })
+              }
+            >
+              {PRICING_MODES.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Cuvinte pe pagină">
-              <TextInput
-                type="number"
-                min={1}
-                value={draft.words_per_page ?? 100}
-                onChange={(e) => patch({ words_per_page: Number(e.target.value) })}
-              />
-            </Field>
-            <Field label="Preț pe pagină">
+            {mode === "per_page" && (
+              <Field label="Cuvinte pe pagină">
+                <TextInput
+                  type="number"
+                  min={1}
+                  value={draft.words_per_page ?? 100}
+                  onChange={(e) => patch({ words_per_page: Number(e.target.value) })}
+                />
+              </Field>
+            )}
+            <Field
+              label={
+                mode === "per_page"
+                  ? "Preț pe pagină (suplimentară)"
+                  : mode === "per_word"
+                    ? "Preț pe cuvânt"
+                    : "Preț pe caracter"
+              }
+              hint={
+                mode === "per_page"
+                  ? "Prima pagină este inclusă în prețul de bază al produsului."
+                  : undefined
+              }
+            >
               <MoneyInput
-                value={draft.price_per_page_amount ?? 0}
-                onChange={(v) => patch({ price_per_page_amount: v ?? 0 })}
+                value={draft.price_per_unit_amount ?? 0}
+                onChange={(v) => patch({ price_per_unit_amount: v ?? 0 })}
               />
             </Field>
             <Field label="Taxă de pornire" hint="Se adaugă o singură dată.">
@@ -114,33 +157,39 @@ export default function TextPricingTab({
                 onChange={(v) => patch({ setup_fee_amount: v ?? 0 })}
               />
             </Field>
-            <Field label="Pagini minime">
-              <TextInput
-                type="number"
-                min={1}
-                value={draft.minimum_pages ?? 1}
-                onChange={(e) => patch({ minimum_pages: Number(e.target.value) })}
-              />
-            </Field>
-            <Field label="Pagini maxime" hint="Gol = nelimitat.">
-              <TextInput
-                type="number"
-                min={1}
-                value={draft.maximum_pages ?? ""}
-                onChange={(e) =>
-                  patch({
-                    maximum_pages: e.target.value === "" ? null : Number(e.target.value),
-                  })
-                }
-              />
-            </Field>
+            {mode === "per_page" && (
+              <>
+                <Field label="Pagini minime">
+                  <TextInput
+                    type="number"
+                    min={1}
+                    value={draft.minimum_pages ?? 1}
+                    onChange={(e) => patch({ minimum_pages: Number(e.target.value) })}
+                  />
+                </Field>
+                <Field label="Pagini maxime" hint="Gol = nelimitat.">
+                  <TextInput
+                    type="number"
+                    min={1}
+                    value={draft.maximum_pages ?? ""}
+                    onChange={(e) =>
+                      patch({
+                        maximum_pages: e.target.value === "" ? null : Number(e.target.value),
+                      })
+                    }
+                  />
+                </Field>
+              </>
+            )}
           </div>
-          <Checkbox
-            label="Rotunjește în sus"
-            hint="247 cuvinte la 100/pagină = 3 pagini."
-            checked={draft.round_up ?? true}
-            onChange={(v) => patch({ round_up: v })}
-          />
+          {mode === "per_page" && (
+            <Checkbox
+              label="Rotunjește în sus"
+              hint="247 cuvinte la 100/pagină = 3 pagini."
+              checked={draft.round_up ?? true}
+              onChange={(v) => patch({ round_up: v })}
+            />
+          )}
           <Button disabled={busy || !draft.text_field_key} onClick={save}>
             {busy ? "Se salvează…" : "Salvează configurația"}
           </Button>

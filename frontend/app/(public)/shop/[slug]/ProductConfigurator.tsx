@@ -1,15 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type {
   ProductDetail,
   ProductInputField,
   QuoteResponse,
+  SiteConfigData,
 } from "@/lib/api";
 import { ApiError, quoteProduct, uploadCartItemFile } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { formatBani } from "@/lib/money";
+import DeliveryNotice from "@/components/DeliveryNotice";
 import PhotoBox from "@/components/PhotoBox";
 import TiptapRenderer, { hasTiptapContent } from "@/components/TiptapRenderer";
 
@@ -29,6 +32,7 @@ function InputFieldControl({
   const label = (
     <label className="mb-2.5 block text-[11px] tracking-[1.5px] text-muted uppercase">
       {field.label}
+      {field.min_words ? ` (min. ${field.min_words} cuvinte)` : ""}
       {field.max_words ? ` (max. ${field.max_words} cuvinte)` : ""}
       {field.required ? " *" : ""}
     </label>
@@ -117,8 +121,10 @@ function InputFieldControl({
 
 export default function ProductConfigurator({
   product,
+  siteConfig,
 }: {
   product: ProductDetail;
+  siteConfig: SiteConfigData | null;
 }) {
   const router = useRouter();
   const { cartKey, refresh } = useCart();
@@ -142,9 +148,17 @@ export default function ProductConfigurator({
   const [quoting, setQuoting] = useState(false);
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
+  const [showAddedBanner, setShowAddedBanner] = useState(false);
   const [addErrors, setAddErrors] = useState<string[]>([]);
 
   const quoteSeq = useRef(0);
+  const addedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
+    };
+  }, []);
 
   const nonFileInputs = useMemo(() => {
     const data: Record<string, unknown> = {};
@@ -233,7 +247,14 @@ export default function ProductConfigurator({
       }
       await refresh();
       setAdded(true);
+      setShowAddedBanner(true);
+      setQuantity(1);
       router.prefetch("/cart");
+      if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
+      addedTimerRef.current = setTimeout(() => {
+        setAdded(false);
+        setShowAddedBanner(false);
+      }, 4000);
     } catch (err) {
       setAddErrors(
         err instanceof ApiError && err.errors.length
@@ -272,6 +293,9 @@ export default function ProductConfigurator({
 
   const pages = quote?.breakdown.pages;
   const wordCount = quote?.breakdown.word_count;
+  const charCount = quote?.breakdown.char_count;
+  const pricingMode = quote?.breakdown.pricing_mode;
+  const extraPages = quote?.breakdown.extra_pages;
 
   return (
     <div className="mx-auto grid max-w-[1440px] grid-cols-1 gap-12 px-6 pt-10 pb-[110px] lg:grid-cols-2 lg:gap-20 lg:px-12">
@@ -331,10 +355,31 @@ export default function ProductConfigurator({
         </div>
         {product.product_type === "text_by_page" &&
           quote &&
-          wordCount !== undefined && (
+          wordCount !== undefined &&
+          pricingMode !== "per_character" &&
+          pricingMode !== "per_word" && (
             <div className="mb-6 -mt-4 text-[13px] text-muted">
               {wordCount} cuvinte · {pages}{" "}
               {pages === 1 ? "pagină" : "pagini"} caligrafiate
+              {extraPages !== undefined && extraPages > 0 && (
+                <> · {extraPages} pagini suplimentare tarifate</>
+              )}
+            </div>
+          )}
+        {product.product_type === "text_by_page" &&
+          quote &&
+          pricingMode === "per_word" &&
+          wordCount !== undefined && (
+            <div className="mb-6 -mt-4 text-[13px] text-muted">
+              {wordCount} cuvinte tarifate
+            </div>
+          )}
+        {product.product_type === "text_by_page" &&
+          quote &&
+          pricingMode === "per_character" &&
+          charCount !== undefined && (
+            <div className="mb-6 -mt-4 text-[13px] text-muted">
+              {charCount} caractere tarifate
             </div>
           )}
         {quoteErrors.length > 0 && (
@@ -464,46 +509,67 @@ export default function ProductConfigurator({
         ))}
 
         {/* QTY + ADD TO CART */}
+        {showAddedBanner && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border border-olive/30 bg-olive/8 px-4 py-3 text-[13px]">
+            <span className="text-olive">Produs adăugat în coș.</span>
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={() => setShowAddedBanner(false)}
+                className="cursor-pointer text-muted underline-offset-2 hover:underline"
+              >
+                Continuă cumpărăturile
+              </button>
+              <Link
+                href="/cart"
+                className="font-medium text-ink underline-offset-2 hover:underline"
+              >
+                Mergi la coș →
+              </Link>
+            </div>
+          </div>
+        )}
         <div className="mb-5 flex gap-4">
           <div className="flex items-center border border-ink/18">
             <button
               onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-              className="h-[52px] w-11 cursor-pointer text-base"
+              disabled={added}
+              className="h-[52px] w-11 cursor-pointer text-base disabled:opacity-40"
             >
               –
             </button>
             <div className="w-11 text-center text-sm">{quantity}</div>
             <button
               onClick={() => setQuantity((q) => q + 1)}
-              className="h-[52px] w-11 cursor-pointer text-base"
+              disabled={added}
+              className="h-[52px] w-11 cursor-pointer text-base disabled:opacity-40"
             >
               +
             </button>
           </div>
           <button
             onClick={handleAddToCart}
-            disabled={adding || !quote}
-            className="flex-1 cursor-pointer bg-ink text-xs tracking-[2px] text-paper disabled:opacity-50"
+            disabled={adding || added || !quote}
+            className={`flex-1 cursor-pointer text-xs tracking-[2px] disabled:opacity-50 ${
+              added
+                ? "bg-olive text-paper"
+                : "bg-ink text-paper"
+            }`}
           >
-            {adding ? "SE ADAUGĂ…" : "ADAUGĂ ÎN COȘ"}
+            {adding
+              ? "SE ADAUGĂ…"
+              : added
+                ? "✓ ADĂUGAT ÎN COȘ"
+                : "ADAUGĂ ÎN COȘ"}
           </button>
         </div>
-        {added && (
-          <div className="mb-4 text-[13px] text-olive">
-            Adăugat în coș.{" "}
-            <button
-              onClick={() => router.push("/cart")}
-              className="cursor-pointer border-b border-olive"
-            >
-              Vezi coșul →
-            </button>
-          </div>
-        )}
         {addErrors.length > 0 && (
           <div className="mb-4 text-[13px] text-[#a03030]">
             {addErrors.join(" ")}
           </div>
         )}
+
+        <DeliveryNotice config={siteConfig} className="mb-6" />
 
         <div className="mt-9 border-t border-ink/10 pt-[26px] text-[13px] leading-8 text-muted">
           <div>

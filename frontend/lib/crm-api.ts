@@ -139,8 +139,9 @@ export interface CrmTextPricing {
   id: number;
   product: number;
   text_field_key: string;
+  pricing_mode: "per_page" | "per_word" | "per_character";
   words_per_page: number;
-  price_per_page_amount: number;
+  price_per_unit_amount: number;
   minimum_pages: number;
   maximum_pages: number | null;
   setup_fee_amount: number;
@@ -388,8 +389,22 @@ export interface CrmSiteConfig {
   default_og_image: number | null;
   announcement_enabled: boolean;
   announcement_text: string;
+  delivery_fee_amount: number;
   free_shipping_threshold_amount: number | null;
   maintenance_mode: boolean;
+  updated_at: string;
+}
+
+export interface CrmHomeHero {
+  id: number;
+  background_image: number | null;
+  tagline: string;
+  title: string;
+  copy: string;
+  primary_button_label: string;
+  primary_button_url: string;
+  secondary_button_label: string;
+  secondary_button_url: string;
   updated_at: string;
 }
 

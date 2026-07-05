@@ -51,15 +51,12 @@ export default function Nav() {
         <Link href="/" className="avelink shrink-0 px-6 text-center">
           <Image
             src="/logo-mark.svg"
-            alt="Ave Letter Studio"
+            alt="Ave Letter Studio — Cadouri personalizate prin caligrafie"
             width={120}
             height={40}
             className="mx-auto block h-10 w-auto"
             priority
           />
-          <div className="mt-1.5 text-[9.5px] tracking-[3.5px] text-olive">
-            LETTER STUDIO
-          </div>
         </Link>
 
         <div className="flex flex-1 items-center justify-end gap-5 lg:gap-9">

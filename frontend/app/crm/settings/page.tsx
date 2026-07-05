@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import {
   crm,
+  CrmHomeHero,
   CrmSiteConfig,
   CrmTaxConfig,
   CrmVatRate,
@@ -27,6 +28,7 @@ import {
   TextInput,
   useToast,
 } from "@/components/crm/ui";
+import MediaPicker, { MediaThumb } from "@/components/crm/MediaPicker";
 
 function SiteConfigPanel() {
   const toast = useToast();
@@ -106,13 +108,6 @@ function SiteConfigPanel() {
               onChange={(e) => patch({ default_seo_title: e.target.value })}
             />
           </Field>
-          <Field label="Prag livrare gratuită" hint="Gol = fără livrare gratuită.">
-            <MoneyInput
-              value={draft.free_shipping_threshold_amount ?? null}
-              onChange={(v) => patch({ free_shipping_threshold_amount: v })}
-              allowEmpty
-            />
-          </Field>
         </div>
         <Field label="Descriere SEO implicită">
           <TextArea
@@ -146,6 +141,217 @@ function SiteConfigPanel() {
           {saving ? "Se salvează…" : "Salvează setările site-ului"}
         </Button>
       </div>
+    </Card>
+  );
+}
+
+function DeliveryConfigPanel() {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const { data: config } = useCrmSingleton<CrmSiteConfig>("site-config");
+  const [draft, setDraft] = useState<Partial<CrmSiteConfig>>({});
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (config) setDraft(config);
+  }, [config]);
+
+  const patch = (f: Partial<CrmSiteConfig>) => setDraft((d) => ({ ...d, ...f }));
+
+  async function save() {
+    setSaving(true);
+    try {
+      await crm.patch<CrmSiteConfig>("/site-config/", {
+        delivery_fee_amount: draft.delivery_fee_amount,
+        free_shipping_threshold_amount: draft.free_shipping_threshold_amount,
+      });
+      qc.invalidateQueries({ queryKey: ["crm", "site-config"] });
+      toast("Setările de livrare au fost salvate.");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Eroare la salvare.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!config) {
+    return (
+      <Card title="Livrare">
+        <p className="text-muted text-sm">Se încarcă…</p>
+      </Card>
+    );
+  }
+
+  const fee = draft.delivery_fee_amount ?? 0;
+  const threshold = draft.free_shipping_threshold_amount;
+
+  return (
+    <Card title="Livrare">
+      <div className="space-y-4">
+        <p className="text-sm text-muted">
+          Exemplu: taxă 25 lei, dar 0 lei dacă subtotalul produselor depășește
+          300 lei (sau suma setată mai jos).
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <Field
+            label="Taxă livrare"
+            hint="Se aplică la finalizarea comenzii. 0 = fără taxă."
+          >
+            <MoneyInput
+              value={fee}
+              onChange={(v) => patch({ delivery_fee_amount: v ?? 0 })}
+            />
+          </Field>
+          <Field
+            label="Prag livrare gratuită (subtotal produse)"
+            hint="Gol = taxa se aplică mereu (dacă e setată). La sau peste prag → 0 lei livrare."
+          >
+            <MoneyInput
+              value={threshold ?? null}
+              onChange={(v) => patch({ free_shipping_threshold_amount: v })}
+              allowEmpty
+            />
+          </Field>
+        </div>
+        {fee > 0 && threshold != null && threshold > 0 && (
+          <p className="rounded-sm border border-ink/10 bg-ink/5 px-3 py-2 text-sm text-body">
+            Clienții văd: livrare {(fee / 100).toFixed(0)} lei; gratuită peste{" "}
+            {(threshold / 100).toFixed(0)} lei subtotal.
+          </p>
+        )}
+        <Button disabled={saving} onClick={save}>
+          {saving ? "Se salvează…" : "Salvează livrarea"}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function HomeHeroPanel() {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const { data: hero } = useCrmSingleton<CrmHomeHero>("home-hero");
+  const [draft, setDraft] = useState<Partial<CrmHomeHero>>({});
+  const [saving, setSaving] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [bgPreview, setBgPreview] = useState<{ url: string; alt_text?: string } | null>(null);
+
+  useEffect(() => {
+    if (hero) setDraft(hero);
+  }, [hero]);
+
+  const patch = (f: Partial<CrmHomeHero>) => setDraft((d) => ({ ...d, ...f }));
+
+  async function save() {
+    setSaving(true);
+    try {
+      await crm.patch<CrmHomeHero>("/home-hero/", draft);
+      qc.invalidateQueries({ queryKey: ["crm", "home-hero"] });
+      toast("Hero-ul paginii principale a fost salvat.");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Eroare la salvare.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!hero) {
+    return (
+      <Card title="Hero pagină principală">
+        <p className="text-muted text-sm">Se încarcă…</p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card title="Hero pagină principală">
+      <div className="space-y-4">
+        <Field label="Imagine fundal">
+          <div className="flex items-center gap-3">
+            <MediaThumb
+              asset={bgPreview}
+              className="w-24 h-16 rounded-sm border border-ink/10"
+            />
+            <Button variant="subtle" onClick={() => setPickerOpen(true)}>
+              {draft.background_image ? "Schimbă imaginea" : "Alege imagine"}
+            </Button>
+            {draft.background_image && (
+              <Button
+                variant="subtle"
+                onClick={() => {
+                  patch({ background_image: null });
+                  setBgPreview(null);
+                }}
+              >
+                Elimină
+              </Button>
+            )}
+          </div>
+        </Field>
+        <Field label="Tagline (script)">
+          <TextInput
+            value={draft.tagline ?? ""}
+            onChange={(e) => patch({ tagline: e.target.value })}
+          />
+        </Field>
+        <Field label="Titlu principal" hint="Folosește Enter pentru linie nouă.">
+          <TextArea
+            rows={2}
+            value={draft.title ?? ""}
+            onChange={(e) => patch({ title: e.target.value })}
+          />
+        </Field>
+        <Field label="Text scurt">
+          <TextArea
+            rows={3}
+            value={draft.copy ?? ""}
+            onChange={(e) => patch({ copy: e.target.value })}
+          />
+        </Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Buton principal — text">
+            <TextInput
+              value={draft.primary_button_label ?? ""}
+              onChange={(e) => patch({ primary_button_label: e.target.value })}
+            />
+          </Field>
+          <Field label="Buton principal — link">
+            <TextInput
+              value={draft.primary_button_url ?? ""}
+              onChange={(e) => patch({ primary_button_url: e.target.value })}
+            />
+          </Field>
+          <Field label="Buton secundar — text">
+            <TextInput
+              value={draft.secondary_button_label ?? ""}
+              onChange={(e) => patch({ secondary_button_label: e.target.value })}
+            />
+          </Field>
+          <Field label="Buton secundar — link">
+            <TextInput
+              value={draft.secondary_button_url ?? ""}
+              onChange={(e) => patch({ secondary_button_url: e.target.value })}
+            />
+          </Field>
+        </div>
+        <Button disabled={saving} onClick={save}>
+          {saving ? "Se salvează…" : "Salvează hero-ul"}
+        </Button>
+      </div>
+      {pickerOpen && (
+        <MediaPicker
+          onClose={() => setPickerOpen(false)}
+          onSelect={(asset) => {
+            setPickerOpen(false);
+            patch({ background_image: asset.id });
+            setBgPreview(
+              asset.url
+                ? { url: asset.url, alt_text: asset.alt_text }
+                : null,
+            );
+          }}
+        />
+      )}
     </Card>
   );
 }
@@ -373,7 +579,11 @@ export default function CrmSettingsPage() {
         subtitle="Configurația site-ului și regimul fiscal"
       />
       <div className="grid lg:grid-cols-2 gap-6 items-start">
-        <SiteConfigPanel />
+        <div className="space-y-6">
+          <DeliveryConfigPanel />
+          <SiteConfigPanel />
+          <HomeHeroPanel />
+        </div>
         <div className="space-y-6">
           <TaxPanel />
           <VatRatesPanel />

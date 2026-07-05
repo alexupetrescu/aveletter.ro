@@ -228,6 +228,11 @@ class ProductInputField(models.Model):
 
 
 class TextByPagePricing(models.Model):
+    class PricingMode(models.TextChoices):
+        PER_PAGE = "per_page", "Pe pagină"
+        PER_WORD = "per_word", "Pe cuvânt"
+        PER_CHARACTER = "per_character", "Pe caracter"
+
     product = models.OneToOneField(
         Product, on_delete=models.CASCADE, related_name="text_pricing",
     )
@@ -235,12 +240,24 @@ class TextByPagePricing(models.Model):
         default="message_text",
         help_text="Which ProductInputField contains the priced text.",
     )
+    pricing_mode = models.CharField(
+        max_length=20,
+        choices=PricingMode.choices,
+        default=PricingMode.PER_PAGE,
+    )
     words_per_page = models.PositiveIntegerField(default=100)
-    price_per_page_amount = models.PositiveIntegerField(help_text="In bani.")
+    price_per_unit_amount = models.PositiveIntegerField(
+        help_text="In bani. Preț pe pagină/cuvânt/caracter (după prima pagină, la mod pagină).",
+    )
     minimum_pages = models.PositiveIntegerField(default=1)
     maximum_pages = models.PositiveIntegerField(null=True, blank=True)
     setup_fee_amount = models.PositiveIntegerField(default=0)
     round_up = models.BooleanField(default=True)
+
+    @property
+    def price_per_page_amount(self):
+        """Backward-compatible alias."""
+        return self.price_per_unit_amount
 
     class Meta:
         verbose_name_plural = "text-by-page pricing"

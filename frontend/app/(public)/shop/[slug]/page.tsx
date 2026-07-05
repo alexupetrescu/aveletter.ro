@@ -1,10 +1,40 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ApiError, getProduct, getProducts } from "@/lib/api";
+import type { Metadata } from "next";
+import { ApiError, getProduct, getProducts, getSiteConfig } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
 import ProductConfigurator from "./ProductConfigurator";
 
 export const revalidate = 60;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  try {
+    const [product, config] = await Promise.all([
+      getProduct(slug),
+      getSiteConfig().catch(() => null),
+    ]);
+    const title =
+      product.seo_title ||
+      `${product.title} — Ave Letter Studio`;
+    const description =
+      product.seo_description ||
+      product.short_description ||
+      config?.default_seo_description ||
+      "";
+    return {
+      title,
+      description,
+      openGraph: { title, description, type: "website" },
+    };
+  } catch {
+    return { title: "Produs — Ave Letter Studio" };
+  }
+}
 
 export default async function ProductPage({
   params,
@@ -13,8 +43,12 @@ export default async function ProductPage({
 }) {
   const { slug } = await params;
   let product;
+  let siteConfig = null;
   try {
-    product = await getProduct(slug);
+    [product, siteConfig] = await Promise.all([
+      getProduct(slug),
+      getSiteConfig().catch(() => null),
+    ]);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) notFound();
     throw err;
@@ -52,7 +86,7 @@ export default async function ProductPage({
       </div>
 
       {/* PRODUCT MAIN */}
-      <ProductConfigurator product={product} />
+      <ProductConfigurator product={product} siteConfig={siteConfig} />
 
       {/* RELATED */}
       {related.length > 0 && (

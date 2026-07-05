@@ -46,7 +46,7 @@ const TABS = [
   { id: "variants", label: "Variante" },
   { id: "options", label: "Opțiuni" },
   { id: "inputs", label: "Câmpuri client" },
-  { id: "pricing", label: "Preț pe pagină" },
+  { id: "pricing", label: "Preț text" },
   { id: "images", label: "Imagini" },
 ] as const;
 

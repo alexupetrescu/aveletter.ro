@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ApiError, startCheckout } from "@/lib/api";
+import { ApiError, getSiteConfig, startCheckout, type SiteConfigData } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { formatBani } from "@/lib/money";
+import DeliveryNotice from "@/components/DeliveryNotice";
+import FilledLink from "@/components/FilledLink";
+import { shippingAmountForSubtotal } from "@/lib/shipping";
 
 const inputClass =
   "w-full border border-ink/18 bg-transparent px-3.5 py-3 text-[14px] outline-none focus:border-ink";
@@ -13,10 +16,13 @@ export default function CheckoutPage() {
   const { cart, cartKey, loading } = useCart();
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [siteConfig, setSiteConfig] = useState<SiteConfigData | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "ramburs">("stripe");
   const [form, setForm] = useState({
     email: "",
     phone: "",
-    full_name: "",
+    first_name: "",
+    last_name: "",
     county: "",
     city: "",
     postal_code: "",
@@ -25,8 +31,14 @@ export default function CheckoutPage() {
     customer_notes: "",
   });
 
+  useEffect(() => {
+    getSiteConfig().then(setSiteConfig).catch(() => null);
+  }, []);
+
   const items = cart?.items ?? [];
   const subtotal = cart?.subtotal_amount ?? 0;
+  const shipping = shippingAmountForSubtotal(subtotal, siteConfig);
+  const total = subtotal + shipping;
 
   const set = (key: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -37,13 +49,15 @@ export default function CheckoutPage() {
     if (!cartKey) return;
     setSubmitting(true);
     setErrors([]);
+    const fullName = `${form.first_name.trim()} ${form.last_name.trim()}`.trim();
     try {
-      const { checkout_url } = await startCheckout(cartKey, {
+      const result = await startCheckout(cartKey, {
         email: form.email,
         phone: form.phone,
         customer_notes: form.customer_notes,
+        payment_method: paymentMethod,
         billing_address: {
-          full_name: form.full_name,
+          full_name: fullName,
           phone: form.phone,
           email: form.email,
           country: "RO",
@@ -54,8 +68,16 @@ export default function CheckoutPage() {
           line2: form.line2,
         },
       });
-      // Redirect to Stripe-hosted checkout. Payment truth comes back via webhook.
-      window.location.href = checkout_url;
+      if (result.payment_method === "ramburs" && result.success_url) {
+        window.location.href = result.success_url;
+        return;
+      }
+      if (result.checkout_url) {
+        window.location.href = result.checkout_url;
+        return;
+      }
+      setErrors(["Comanda nu a putut fi inițiată. Încearcă din nou."]);
+      setSubmitting(false);
     } catch (err) {
       setErrors(
         err instanceof ApiError && err.errors.length
@@ -73,12 +95,7 @@ export default function CheckoutPage() {
         <p className="mb-8 text-[14.5px] text-muted">
           Coșul tău este gol — adaugă un produs înainte de a finaliza comanda.
         </p>
-        <Link
-          href="/shop"
-          className="avelink inline-block bg-ink px-[34px] py-4 text-xs tracking-[2px] text-paper"
-        >
-          VEZI PRODUSELE
-        </Link>
+        <FilledLink href="/shop">VEZI PRODUSELE</FilledLink>
       </div>
     );
   }
@@ -95,7 +112,6 @@ export default function CheckoutPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-14 lg:grid-cols-[1.2fr_1fr]">
-        {/* FORM */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           <div className="mb-1 text-[11px] tracking-[2px] text-olive">
             DATE DE CONTACT
@@ -103,6 +119,8 @@ export default function CheckoutPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <input
               type="email"
+              name="email"
+              autoComplete="email"
               required
               placeholder="Email *"
               value={form.email}
@@ -110,6 +128,9 @@ export default function CheckoutPage() {
               className={inputClass}
             />
             <input
+              type="tel"
+              name="tel"
+              autoComplete="tel"
               required
               placeholder="Telefon *"
               value={form.phone}
@@ -121,14 +142,32 @@ export default function CheckoutPage() {
           <div className="mt-4 mb-1 text-[11px] tracking-[2px] text-olive">
             ADRESA DE LIVRARE
           </div>
+          <p className="text-[12.5px] text-muted">
+            Livrarea se face exclusiv pe teritoriul României.
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <input
+              name="given-name"
+              autoComplete="given-name"
+              required
+              placeholder="Prenume *"
+              value={form.first_name}
+              onChange={set("first_name")}
+              className={inputClass}
+            />
+            <input
+              name="family-name"
+              autoComplete="family-name"
+              required
+              placeholder="Nume *"
+              value={form.last_name}
+              onChange={set("last_name")}
+              className={inputClass}
+            />
+          </div>
           <input
-            required
-            placeholder="Nume complet *"
-            value={form.full_name}
-            onChange={set("full_name")}
-            className={inputClass}
-          />
-          <input
+            name="address-line1"
+            autoComplete="address-line1"
             required
             placeholder="Stradă, număr *"
             value={form.line1}
@@ -136,6 +175,8 @@ export default function CheckoutPage() {
             className={inputClass}
           />
           <input
+            name="address-line2"
+            autoComplete="address-line2"
             placeholder="Bloc, scară, apartament"
             value={form.line2}
             onChange={set("line2")}
@@ -143,6 +184,8 @@ export default function CheckoutPage() {
           />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <input
+              name="address-level2"
+              autoComplete="address-level2"
               required
               placeholder="Oraș *"
               value={form.city}
@@ -150,17 +193,57 @@ export default function CheckoutPage() {
               className={inputClass}
             />
             <input
+              name="address-level1"
+              autoComplete="address-level1"
               placeholder="Județ"
               value={form.county}
               onChange={set("county")}
               className={inputClass}
             />
             <input
+              name="postal-code"
+              autoComplete="postal-code"
               placeholder="Cod poștal"
               value={form.postal_code}
               onChange={set("postal_code")}
               className={inputClass}
             />
+          </div>
+
+          <div className="mt-4 mb-1 text-[11px] tracking-[2px] text-olive">
+            METODĂ DE PLATĂ
+          </div>
+          <div className="flex flex-col gap-3">
+            <label className="flex cursor-pointer items-start gap-3 border border-ink/18 p-4 text-[13.5px]">
+              <input
+                type="radio"
+                name="payment_method"
+                checked={paymentMethod === "stripe"}
+                onChange={() => setPaymentMethod("stripe")}
+                className="mt-1"
+              />
+              <span>
+                <span className="block font-medium">Card online (Stripe)</span>
+                <span className="text-muted">
+                  Plată securizată — vei fi redirecționat către pagina Stripe.
+                </span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3 border border-ink/18 p-4 text-[13.5px]">
+              <input
+                type="radio"
+                name="payment_method"
+                checked={paymentMethod === "ramburs"}
+                onChange={() => setPaymentMethod("ramburs")}
+                className="mt-1"
+              />
+              <span>
+                <span className="block font-medium">Ramburs (plată la livrare)</span>
+                <span className="text-muted">
+                  Plătești curierului la primirea coletului.
+                </span>
+              </span>
+            </label>
           </div>
 
           <div className="mt-4 mb-1 text-[11px] tracking-[2px] text-olive">
@@ -185,15 +268,14 @@ export default function CheckoutPage() {
             disabled={submitting || loading}
             className="mt-4 cursor-pointer bg-ink px-[42px] py-4 text-xs tracking-[2px] text-paper disabled:opacity-50"
           >
-            {submitting ? "SE REDIRECȚIONEAZĂ…" : "CONTINUĂ SPRE PLATĂ →"}
+            {submitting
+              ? "SE PROCESEAZĂ…"
+              : paymentMethod === "stripe"
+                ? "CONTINUĂ SPRE PLATĂ →"
+                : "PLASEAZĂ COMANDA →"}
           </button>
-          <p className="text-[12px] leading-[1.7] text-stone">
-            Plata se face securizat prin Stripe. Vei fi redirecționat către
-            pagina de plată.
-          </p>
         </form>
 
-        {/* SUMMARY */}
         <div className="h-fit border border-ink/10 p-7">
           <div className="mb-5 text-[11px] tracking-[2px] text-olive">
             SUMAR COMANDĂ
@@ -210,13 +292,26 @@ export default function CheckoutPage() {
               </div>
             ))}
           </div>
-          <div className="flex justify-between pt-5 text-[15px] font-medium">
-            <span>Total</span>
+          <div className="flex justify-between pt-4 text-[13.5px]">
+            <span className="text-muted">Subtotal</span>
             <span>{formatBani(subtotal, cart?.currency)}</span>
           </div>
-          <p className="mt-2 text-[12px] text-stone">
+          <div className="flex justify-between pt-2 text-[13.5px]">
+            <span className="text-muted">Livrare</span>
+            <span>
+              {shipping > 0
+                ? formatBani(shipping, cart?.currency)
+                : "Gratuită"}
+            </span>
+          </div>
+          <div className="mt-3 flex justify-between border-t border-ink/10 pt-4 text-[15px] font-medium">
+            <span>Total</span>
+            <span>{formatBani(total, cart?.currency)}</span>
+          </div>
+          <DeliveryNotice config={siteConfig} className="mt-4" />
+          <p className="mt-3 text-[12px] text-stone">
             Prețurile sunt recalculate și verificate de server înainte de
-            plată.
+            finalizare.
           </p>
         </div>
       </div>

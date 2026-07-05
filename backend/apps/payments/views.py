@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 
 class CheckoutStartView(APIView):
     """
-    Re-quotes the cart server-side, freezes the Order, creates a Stripe
-    Checkout Session and returns its URL. Never trusts client prices.
+    Re-quotes the cart server-side, freezes the Order, then either creates a
+    Stripe Checkout Session or a cash-on-delivery (ramburs) order.
     """
 
     def post(self, request):
@@ -29,19 +29,20 @@ class CheckoutStartView(APIView):
         cart = Cart.objects.filter(session_key=key).first() if key else None
         if cart is None or not cart.items.exists():
             return Response(
-                {"errors": ["Cart is empty."]}, status=status.HTTP_400_BAD_REQUEST,
+                {"errors": ["Coșul este gol."]}, status=status.HTTP_400_BAD_REQUEST,
             )
 
         email = (request.data.get("email") or "").strip()
         if not email:
             return Response(
-                {"errors": ["Email is required."]}, status=status.HTTP_400_BAD_REQUEST,
+                {"errors": ["Emailul este obligatoriu."]},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         billing_serializer = AddressSerializer(data=request.data.get("billing_address") or {})
         if not billing_serializer.is_valid():
             return Response(
-                {"errors": ["Invalid billing address."],
+                {"errors": ["Adresa de facturare este invalidă."],
                  "field_errors": billing_serializer.errors},
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -51,11 +52,18 @@ class CheckoutStartView(APIView):
             shipping_serializer = AddressSerializer(data=request.data["shipping_address"])
             if not shipping_serializer.is_valid():
                 return Response(
-                    {"errors": ["Invalid shipping address."],
+                    {"errors": ["Adresa de livrare este invalidă."],
                      "field_errors": shipping_serializer.errors},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             shipping_data = shipping_serializer.validated_data
+
+        payment_method = (request.data.get("payment_method") or "stripe").strip().lower()
+        if payment_method not in ("stripe", "ramburs"):
+            return Response(
+                {"errors": ["Metoda de plată selectată nu este validă."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             order = create_order_from_cart(
@@ -70,12 +78,35 @@ class CheckoutStartView(APIView):
         except CheckoutError as exc:
             return Response({"errors": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
 
+        cart.items.all().delete()
+
+        if payment_method == "ramburs":
+            Payment.objects.create(
+                order=order,
+                provider=Payment.Provider.CASH,
+                status=Payment.Status.PENDING,
+                amount=order.total_amount,
+                currency=order.currency,
+            )
+            success_url = (
+                f"{settings.FRONTEND_URL}/checkout/success"
+                f"?order={order.order_number}&payment=ramburs"
+            )
+            return Response({
+                "order_number": order.order_number,
+                "payment_method": "ramburs",
+                "success_url": success_url,
+                "subtotal_amount": order.subtotal_amount,
+                "shipping_amount": order.shipping_amount,
+                "total_amount": order.total_amount,
+            })
+
         try:
             session = create_checkout_session(order)
         except stripe.error.StripeError:
             logger.exception("Stripe session creation failed for %s", order.order_number)
             return Response(
-                {"errors": ["Payment provider error. Please try again."]},
+                {"errors": ["Eroare la procesatorul de plăți. Încearcă din nou."]},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -88,13 +119,13 @@ class CheckoutStartView(APIView):
             stripe_checkout_session_id=session.id,
         )
 
-        # Cart is consumed by the order; a cancelled payment sends the customer
-        # back with a fresh cart rather than double-ordering a stale one.
-        cart.items.all().delete()
-
         return Response({
             "order_number": order.order_number,
+            "payment_method": "stripe",
             "checkout_url": session.url,
+            "subtotal_amount": order.subtotal_amount,
+            "shipping_amount": order.shipping_amount,
+            "total_amount": order.total_amount,
         })
 
 
@@ -129,7 +160,6 @@ class StripeWebhookView(APIView):
             logger.warning("Webhook for unknown checkout session %s", session["id"])
             return
 
-        # Idempotency: the same event can't be applied twice.
         if payment.last_event_id == event["id"]:
             return
         if payment.status == Payment.Status.SUCCEEDED:

@@ -71,7 +71,7 @@ class CartItemsView(APIView):
     def post(self, request):
         if not _cart_key(request):
             return Response(
-                {"errors": [f"Missing {CART_KEY_HEADER} header."]},
+                {"errors": [f"Lipsește headerul {CART_KEY_HEADER}."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         cart = _get_cart(request, create=True)
@@ -190,25 +190,25 @@ class CartItemUploadView(APIView):
         upload_file = request.FILES.get("file")
         if not field_key or not upload_file:
             return Response(
-                {"errors": ["'field_key' and 'file' are required."]},
+                {"errors": ["„field_key” și „file” sunt obligatorii."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not item.product.input_fields.filter(
             key=field_key, field_type="file",
         ).exists():
             return Response(
-                {"errors": [f"No file input field '{field_key}' on this product."]},
+                {"errors": [f"Produsul nu are câmp de fișier „{field_key}”."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if upload_file.size > MAX_UPLOAD_BYTES:
             return Response(
-                {"errors": ["File too large (max 20 MB)."]},
+                {"errors": ["Fișier prea mare (max. 20 MB)."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         content_type = getattr(upload_file, "content_type", "") or ""
         if content_type not in ALLOWED_UPLOAD_TYPES:
             return Response(
-                {"errors": [f"File type '{content_type}' not allowed."]},
+                {"errors": [f"Tipul de fișier „{content_type}” nu este permis."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

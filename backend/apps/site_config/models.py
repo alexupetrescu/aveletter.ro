@@ -18,9 +18,16 @@ class SiteConfig(models.Model):
     )
     announcement_enabled = models.BooleanField(default=False)
     announcement_text = models.CharField(max_length=255, blank=True)
+    delivery_fee_amount = models.PositiveIntegerField(
+        default=0,
+        help_text="In bani. Ex: 2500 = 25 RON. Taxă standard de livrare.",
+    )
     free_shipping_threshold_amount = models.PositiveIntegerField(
         null=True, blank=True,
-        help_text="In bani. Example: 30000 = 300 RON.",
+        help_text=(
+            "In bani. Ex: 30000 = 300 RON. Dacă subtotalul produselor "
+            "≥ acest prag, taxa de livrare nu se aplică (0 lei)."
+        ),
     )
     maintenance_mode = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
@@ -31,6 +38,55 @@ class SiteConfig(models.Model):
 
     def __str__(self):
         return self.site_name
+
+    @classmethod
+    def get_solo(cls):
+        obj = cls.objects.first()
+        if obj is None:
+            obj = cls.objects.create()
+        return obj
+
+    def shipping_amount_for_subtotal(self, subtotal_gross: int) -> int:
+        """Delivery fee in bani; 0 if subtotal ≥ free_shipping_threshold_amount."""
+        fee = self.delivery_fee_amount or 0
+        if not fee:
+            return 0
+        threshold = self.free_shipping_threshold_amount
+        if threshold is not None and subtotal_gross >= threshold:
+            return 0
+        return fee
+
+
+class HomeHero(models.Model):
+    """Singleton homepage hero block."""
+
+    background_image = models.ForeignKey(
+        "media_library.MediaAsset",
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    tagline = models.CharField(max_length=120, default="scris cu suflet")
+    title = models.CharField(max_length=200, default="Cadouri personalizate")
+    copy = models.TextField(
+        blank=True,
+        default=(
+            "Împreună scriem cadoul potrivit. La Ave Letter Studio găsești "
+            "idei de cadouri caligrafiate manual, gândite pentru oamenii dragi."
+        ),
+    )
+    primary_button_label = models.CharField(max_length=80, default="VEZI PRODUSELE")
+    primary_button_url = models.CharField(max_length=255, default="/shop")
+    secondary_button_label = models.CharField(max_length=80, default="SERVICII")
+    secondary_button_url = models.CharField(max_length=255, default="#servicii")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "homepage hero"
+        verbose_name_plural = "homepage hero"
+
+    def __str__(self):
+        return "Homepage hero"
 
     @classmethod
     def get_solo(cls):

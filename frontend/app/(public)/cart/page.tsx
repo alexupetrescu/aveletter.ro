@@ -1,12 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { getSiteConfig, type SiteConfigData } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { formatBani } from "@/lib/money";
+import DeliveryNotice from "@/components/DeliveryNotice";
+import FilledLink from "@/components/FilledLink";
 import PhotoBox from "@/components/PhotoBox";
 
 export default function CartPage() {
   const { cart, loading, updateItem, removeItem } = useCart();
+  const [siteConfig, setSiteConfig] = useState<SiteConfigData | null>(null);
+
+  useEffect(() => {
+    getSiteConfig().then(setSiteConfig).catch(() => null);
+  }, []);
 
   const items = cart?.items ?? [];
   const subtotal = cart?.subtotal_amount ?? 0;
@@ -31,12 +40,7 @@ export default function CartPage() {
           <p className="mb-8 text-[14.5px] text-muted">
             Coșul tău este gol deocamdată.
           </p>
-          <Link
-            href="/shop"
-            className="avelink inline-block bg-ink px-[34px] py-4 text-xs tracking-[2px] text-paper"
-          >
-            VEZI PRODUSELE
-          </Link>
+        <FilledLink href="/shop">VEZI PRODUSELE</FilledLink>
         </div>
       ) : (
         <>
@@ -132,15 +136,10 @@ export default function CartPage() {
               <span className="text-muted">Subtotal</span>
               <span>{formatBani(subtotal, cart?.currency)}</span>
             </div>
-            <p className="text-[12px] text-stone">
-              Livrarea se calculează la finalizarea comenzii.
-            </p>
-            <Link
-              href="/checkout"
-              className="avelink mt-3 inline-block bg-ink px-[42px] py-4 text-xs tracking-[2px] text-paper"
-            >
+            <DeliveryNotice config={siteConfig} className="max-w-[360px] text-right" />
+            <FilledLink href="/checkout" className="mt-3 px-[42px]">
               FINALIZEAZĂ COMANDA →
-            </Link>
+            </FilledLink>
           </div>
         </>
       )}

@@ -3,7 +3,10 @@ import threading
 from django.db import connection
 from django.test import TestCase, TransactionTestCase
 
+from apps.site_config.models import SiteConfig
+
 from .models import InvoiceSeries, TaxConfig, VatRate
+from .services import _compute_shipping_amount
 from .tax import compute_vat
 
 
@@ -69,6 +72,36 @@ class ComputeVatTests(TestCase):
                 result.net_amount + result.vat_amount, result.gross_amount,
                 f"invariant broken for {amount}",
             )
+
+
+class ShippingAmountTests(TestCase):
+    def setUp(self):
+        self.config = SiteConfig.objects.create(
+            delivery_fee_amount=2500,
+            free_shipping_threshold_amount=30000,
+        )
+
+    def test_fee_below_threshold(self):
+        self.assertEqual(
+            _compute_shipping_amount(29999),
+            2500,
+        )
+
+    def test_free_at_threshold(self):
+        self.assertEqual(_compute_shipping_amount(30000), 0)
+
+    def test_free_above_threshold(self):
+        self.assertEqual(_compute_shipping_amount(50000), 0)
+
+    def test_no_fee_when_delivery_zero(self):
+        self.config.delivery_fee_amount = 0
+        self.config.save()
+        self.assertEqual(_compute_shipping_amount(1000), 0)
+
+    def test_fee_always_when_no_threshold(self):
+        self.config.free_shipping_threshold_amount = None
+        self.config.save()
+        self.assertEqual(_compute_shipping_amount(999999), 2500)
 
 
 class InvoiceSeriesTests(TransactionTestCase):

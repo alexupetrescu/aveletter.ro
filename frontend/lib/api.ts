@@ -104,11 +104,43 @@ export interface QuoteResponse {
     base_amount: number;
     option_amount: number;
     pricing_type: string;
+    pricing_mode?: string;
     items: Array<Record<string, unknown>>;
     word_count?: number;
     pages?: number;
+    extra_pages?: number;
+    char_count?: number;
   };
   warnings: string[];
+}
+
+export interface HomeHeroData {
+  tagline: string;
+  title: string;
+  copy: string;
+  primary_button_label: string;
+  primary_button_url: string;
+  secondary_button_label: string;
+  secondary_button_url: string;
+  background_image_url: string | null;
+}
+
+export interface SiteConfigData {
+  site_name: string;
+  domain: string;
+  contact_email: string;
+  contact_phone: string;
+  instagram_url: string;
+  facebook_url: string;
+  default_seo_title: string;
+  default_seo_description: string;
+  default_og_image_url: string | null;
+  announcement_enabled: boolean;
+  announcement_text: string;
+  delivery_fee_amount: number;
+  free_shipping_threshold_amount: number | null;
+  maintenance_mode: boolean;
+  hero: HomeHeroData;
 }
 
 export interface PostListItem {
@@ -262,6 +294,12 @@ export function getPost(slug: string): Promise<PostDetail> {
   } as RequestInit);
 }
 
+export function getSiteConfig(): Promise<SiteConfigData> {
+  return request<SiteConfigData>("/api/site-config/", {
+    next: { revalidate: 60 },
+  } as RequestInit);
+}
+
 // ---- Quote (client-side, Django-authoritative) ----
 
 export function quoteProduct(
@@ -358,6 +396,16 @@ export interface AddressInput {
   line2?: string;
 }
 
+export interface CheckoutStartResponse {
+  order_number: string;
+  payment_method: "stripe" | "ramburs";
+  checkout_url?: string;
+  success_url?: string;
+  subtotal_amount: number;
+  shipping_amount: number;
+  total_amount: number;
+}
+
 export function startCheckout(
   cartKey: string,
   payload: {
@@ -366,9 +414,10 @@ export function startCheckout(
     billing_address: AddressInput;
     shipping_address?: AddressInput;
     customer_notes?: string;
+    payment_method?: "stripe" | "ramburs";
   },
-): Promise<{ order_number: string; checkout_url: string }> {
-  return request("/api/checkout/start/", {
+): Promise<CheckoutStartResponse> {
+  return request<CheckoutStartResponse>("/api/checkout/start/", {
     method: "POST",
     body: JSON.stringify(payload),
     cartKey,

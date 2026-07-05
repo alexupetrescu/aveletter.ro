@@ -1,10 +1,31 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { ApiError, getPost, getPosts } from "@/lib/api";
 import PhotoBox from "@/components/PhotoBox";
 import TiptapRenderer, { hasTiptapContent } from "@/components/TiptapRenderer";
 
 export const revalidate = 60;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  try {
+    const post = await getPost(slug);
+    const title = post.seo_title || `${post.title} — Ave Letter Studio`;
+    const description = post.seo_description || post.excerpt;
+    return {
+      title,
+      description,
+      openGraph: { title, description, type: "article" },
+    };
+  } catch {
+    return { title: "Articol — Ave Letter Studio" };
+  }
+}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("ro-RO", {

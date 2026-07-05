@@ -129,7 +129,7 @@ class TextByPageTests(TestCase):
             product=self.product,
             text_field_key="message_text",
             words_per_page=100,
-            price_per_page_amount=7000,
+            price_per_unit_amount=7000,
             setup_fee_amount=3000,
             minimum_pages=1,
         )
@@ -139,15 +139,17 @@ class TextByPageTests(TestCase):
         return quote_product(self.product, inputs={"message_text": text})
 
     def test_page_math_example_from_spec(self):
-        # ceil(247/100) = 3 pages -> 30 + 3*70 = 240 RON
+        # ceil(247/100) = 3 pages; prima pagină în preț bază, extra 2 × 70 + setup 30 = 170 RON
         quote = self.quote_words(247)
         self.assertEqual(quote.breakdown["pages"], 3)
-        self.assertEqual(quote.unit_price_amount, 24000)
+        self.assertEqual(quote.breakdown["extra_pages"], 2)
+        self.assertEqual(quote.unit_price_amount, 17000)
 
     def test_minimum_pages(self):
         quote = self.quote_words(1)
         self.assertEqual(quote.breakdown["pages"], 1)
-        self.assertEqual(quote.unit_price_amount, 10000)
+        self.assertEqual(quote.breakdown["extra_pages"], 0)
+        self.assertEqual(quote.unit_price_amount, 3000)
 
     def test_exact_page_boundary(self):
         quote = self.quote_words(200)

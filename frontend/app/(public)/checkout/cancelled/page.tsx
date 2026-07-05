@@ -1,4 +1,5 @@
 import Link from "next/link";
+import FilledLink from "@/components/FilledLink";
 
 export default function CheckoutCancelledPage() {
   return (
@@ -11,12 +12,7 @@ export default function CheckoutCancelledPage() {
         așteaptă în atelier.
       </p>
       <div className="flex justify-center gap-4">
-        <Link
-          href="/shop"
-          className="avelink inline-block bg-ink px-[34px] py-4 text-xs tracking-[2px] text-paper"
-        >
-          ÎNAPOI LA PRODUSE
-        </Link>
+        <FilledLink href="/shop">ÎNAPOI LA PRODUSE</FilledLink>
         <Link
           href="/cart"
           className="avelink inline-block border border-ink px-[34px] py-4 text-xs tracking-[2px]"

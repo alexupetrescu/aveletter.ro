@@ -203,7 +203,7 @@ class Command(BaseCommand):
                 product=p,
                 text_field_key="message_text",
                 words_per_page=100,
-                price_per_page_amount=7000,
+                price_per_unit_amount=7000,
                 setup_fee_amount=3000,
                 minimum_pages=1,
             )

@@ -25,7 +25,7 @@ from apps.shop.models import (
     ProductVariant,
     TextByPagePricing,
 )
-from apps.site_config.models import SiteConfig
+from apps.site_config.models import HomeHero, SiteConfig
 
 
 # ---------------------------------------------------------------------------
@@ -196,8 +196,8 @@ class TextByPagePricingCrmSerializer(serializers.ModelSerializer):
     class Meta:
         model = TextByPagePricing
         fields = [
-            "id", "product", "text_field_key", "words_per_page",
-            "price_per_page_amount", "minimum_pages", "maximum_pages",
+            "id", "product", "text_field_key", "pricing_mode", "words_per_page",
+            "price_per_unit_amount", "minimum_pages", "maximum_pages",
             "setup_fee_amount", "round_up",
         ]
 
@@ -490,5 +490,16 @@ class SiteConfigCrmSerializer(serializers.ModelSerializer):
             "instagram_url", "facebook_url", "default_seo_title",
             "default_seo_description", "default_og_image",
             "announcement_enabled", "announcement_text",
-            "free_shipping_threshold_amount", "maintenance_mode", "updated_at",
+            "delivery_fee_amount", "free_shipping_threshold_amount",
+            "maintenance_mode", "updated_at",
+        ]
+
+
+class HomeHeroCrmSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HomeHero
+        fields = [
+            "id", "background_image", "tagline", "title", "copy",
+            "primary_button_label", "primary_button_url",
+            "secondary_button_label", "secondary_button_url", "updated_at",
         ]

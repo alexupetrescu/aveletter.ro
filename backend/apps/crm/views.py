@@ -27,7 +27,7 @@ from apps.shop.models import (
     ProductVariant,
     TextByPagePricing,
 )
-from apps.site_config.models import SiteConfig
+from apps.site_config.models import HomeHero, SiteConfig
 
 from . import serializers as s
 from .permissions import IsStaff
@@ -302,6 +302,20 @@ class SiteConfigCrmView(APIView):
     def patch(self, request):
         config = SiteConfig.get_solo()
         serializer = s.SiteConfigCrmSerializer(config, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class HomeHeroCrmView(APIView):
+    permission_classes = [IsStaff]
+
+    def get(self, request):
+        return Response(s.HomeHeroCrmSerializer(HomeHero.get_solo()).data)
+
+    def patch(self, request):
+        hero = HomeHero.get_solo()
+        serializer = s.HomeHeroCrmSerializer(hero, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)

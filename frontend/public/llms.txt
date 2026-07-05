@@ -1,0 +1,24 @@
+# Ave Letter Studio
+
+> Cadouri și obiecte personalizate prin caligrafie, create manual într-un atelier din România.
+
+Site: https://aveletter.ro
+Contact: vezi pagina de contact sau emailul din footer
+
+## Despre
+
+Ave Letter Studio este un atelier de caligrafie din România. Oferim cadouri personalizate: invitații de nuntă, tablouri caligrafice, jurăminte, ornamente cu text scurt și caligrafie pe obiecte.
+
+## Pagini principale
+
+- Acasă: /
+- Produse: /shop
+- Blog: /blog
+
+## Livrare
+
+Livrarea se face exclusiv pe teritoriul României. Pentru comenzi internaționale, contactați-ne prin email.
+
+## Limba
+
+Conținutul site-ului este în limba română.

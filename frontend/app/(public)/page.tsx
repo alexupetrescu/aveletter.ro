@@ -1,9 +1,15 @@
 import Link from "next/link";
-import { getCategories, getProducts } from "@/lib/api";
+import type { Metadata } from "next";
+import { getCategories, getProducts, getSiteConfig } from "@/lib/api";
 import PhotoBox from "@/components/PhotoBox";
+import FilledLink from "@/components/FilledLink";
 import ProductCard from "@/components/ProductCard";
 
 export const revalidate = 60;
+
+export const metadata: Metadata = {
+  title: "Ave Letter Studio — Cadouri personalizate prin caligrafie",
+};
 
 const SERVICES = [
   {
@@ -25,54 +31,70 @@ const SERVICES = [
 
 async function loadData() {
   try {
-    const [categories, products] = await Promise.all([
+    const [categories, products, siteConfig] = await Promise.all([
       getCategories(),
       getProducts({ featured: true }),
+      getSiteConfig().catch(() => null),
     ]);
-    return { categories, products };
+    return { categories, products, siteConfig };
   } catch {
-    return { categories: [], products: [] };
+    return { categories: [], products: [], siteConfig: null };
   }
 }
 
 export default async function LandingPage() {
-  const { categories, products } = await loadData();
+  const { categories, products, siteConfig } = await loadData();
+  const hero = siteConfig?.hero;
 
   return (
     <div>
       {/* HERO */}
-      <div className="photo-placeholder-dark relative flex min-h-[560px] items-center !justify-start h-[88vh]">
-        <div className="absolute top-[26px] left-1/2 -translate-x-1/2 font-mono text-xs tracking-[0.5px] text-stone">
-          [ foto: masă de atelier, cerneală &amp; pană, lumină naturală ]
-        </div>
+      <div
+        className="photo-placeholder-dark relative flex min-h-[560px] items-center !justify-start h-[88vh]"
+        style={
+          hero?.background_image_url
+            ? {
+                backgroundImage: `url(${hero.background_image_url})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }
+            : undefined
+        }
+      >
+        {!hero?.background_image_url && (
+          <div className="absolute top-[26px] left-1/2 -translate-x-1/2 font-mono text-xs tracking-[0.5px] text-stone">
+            [ foto: masă de atelier, cerneală &amp; pană, lumină naturală ]
+          </div>
+        )}
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(248,246,240,0.55)_0%,rgba(248,246,240,0.1)_55%)]" />
         <div className="relative mx-auto w-full max-w-[1440px] px-6 lg:px-12">
           <div className="max-w-[620px]">
-            <div className="mb-1.5 font-script text-[30px] text-olive">
-              scris cu suflet
+            <div className="mb-4 inline-block bg-white/75 px-4 py-2 backdrop-blur-[2px]">
+              <span className="font-script text-[30px] text-olive">
+                {hero?.tagline ?? "scris cu suflet"}
+              </span>
             </div>
             <h1 className="mb-6 font-serif text-[52px] leading-[1.02] font-medium tracking-[0.5px] lg:text-[76px]">
-              Cadouri
-              <br />
-              personalizate
+              <span className="mb-3 block font-sans text-[11px] font-normal tracking-[2.5px] text-muted uppercase">
+                Ave Letter Studio — Cadouri personalizate prin caligrafie
+              </span>
+              <span className="block whitespace-pre-line">
+                {hero?.title ?? "Cadouri\npersonalizate"}
+              </span>
             </h1>
             <p className="mb-9 max-w-[460px] text-base leading-[1.75] text-body">
-              Împreună scriem cadoul potrivit. La Ave Letter Studio găsești
-              idei de cadouri caligrafiate manual, gândite pentru oamenii
-              dragi.
+              {hero?.copy ??
+                "Împreună scriem cadoul potrivit. La Ave Letter Studio găsești idei de cadouri caligrafiate manual, gândite pentru oamenii dragi."}
             </p>
             <div className="flex gap-4">
+              <FilledLink href={hero?.primary_button_url ?? "/shop"}>
+                {hero?.primary_button_label ?? "VEZI PRODUSELE"}
+              </FilledLink>
               <Link
-                href="/shop"
-                className="avelink bg-ink px-[34px] py-4 text-xs tracking-[2px] text-paper"
-              >
-                VEZI PRODUSELE
-              </Link>
-              <Link
-                href="#servicii"
+                href={hero?.secondary_button_url ?? "#servicii"}
                 className="avelink border border-ink px-[34px] py-4 text-xs tracking-[2px]"
               >
-                SERVICII
+                {hero?.secondary_button_label ?? "SERVICII"}
               </Link>
             </div>
           </div>
