@@ -40,7 +40,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={push}>
       {children}
-      <div className="fixed bottom-5 right-5 z-50 space-y-2">
+      <div className="fixed bottom-5 right-5 z-50 space-y-2 max-lg:bottom-20 max-lg:right-4 max-lg:left-4 max-lg:space-y-2">
         {toasts.map((t) => (
           <div
             key={t.id}
@@ -72,12 +72,14 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 mb-6">
-      <div>
-        <h1 className="font-serif text-[28px] leading-tight">{title}</h1>
+    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-5 sm:mb-6">
+      <div className="min-w-0">
+        <h1 className="font-serif text-[26px] sm:text-[28px] leading-tight">{title}</h1>
         {subtitle && <p className="text-[13px] text-muted mt-1">{subtitle}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+      {actions && (
+        <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>
+      )}
     </div>
   );
 }
@@ -153,14 +155,16 @@ export function ConfirmDeleteButton({
 
   if (arming) {
     return (
-      <span className="inline-flex items-center gap-2">
+      <span className="inline-flex flex-col sm:flex-row sm:items-center gap-2 max-w-full">
         <span className="text-[12px] text-red-700">{message}</span>
-        <Button variant="danger" onClick={() => { setArming(false); onConfirm(); }}>
-          Confirmă
-        </Button>
-        <Button variant="subtle" onClick={() => setArming(false)}>
-          Anulează
-        </Button>
+        <span className="flex items-center gap-2">
+          <Button variant="danger" onClick={() => { setArming(false); onConfirm(); }}>
+            Confirmă
+          </Button>
+          <Button variant="subtle" onClick={() => setArming(false)}>
+            Anulează
+          </Button>
+        </span>
       </span>
     );
   }

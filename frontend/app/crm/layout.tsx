@@ -13,6 +13,7 @@ import {
 
 import { crmLogout, crmMe } from "@/lib/crm-api";
 import { ToastProvider } from "@/components/crm/ui";
+import { MobileHeader, MobileTabBar } from "@/components/crm/MobileNav";
 
 const NAV = [
   { href: "/crm", label: "Dashboard" },
@@ -34,7 +35,7 @@ function Sidebar({ userName }: { userName: string }) {
     href === "/crm" ? pathname === "/crm" : pathname.startsWith(href);
 
   return (
-    <aside className="w-56 shrink-0 border-r border-ink/10 bg-white/60 flex flex-col min-h-screen sticky top-0 max-h-screen">
+    <aside className="hidden lg:flex w-56 shrink-0 border-r border-ink/10 bg-white/60 flex-col min-h-screen sticky top-0 max-h-screen">
       <Link href="/crm" className="flex items-center gap-2.5 px-5 py-5 border-b border-ink/10">
         <Image src="/logo-mark.svg" alt="Ave Letter" width={28} height={28} className="h-7 w-auto" />
         <span className="text-[13px] tracking-[0.18em] uppercase font-medium">
@@ -110,7 +111,15 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-paper">
       <Sidebar userName={user.name} />
-      <main className="flex-1 min-w-0 px-8 py-8">{children}</main>
+      <div className="flex flex-col flex-1 min-w-0 min-h-screen">
+        <div className="lg:hidden">
+          <MobileHeader userName={user.name} />
+        </div>
+        <main className="flex-1 min-w-0 px-4 py-5 pb-24 lg:px-8 lg:py-8 lg:pb-8">
+          {children}
+        </main>
+        <MobileTabBar userName={user.name} />
+      </div>
     </div>
   );
 }

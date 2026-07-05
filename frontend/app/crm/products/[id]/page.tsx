@@ -166,7 +166,7 @@ export default function CrmProductEditorPage({
       />
 
       {!isNew && (
-        <div className="flex gap-1 border-b border-ink/10 mb-6">
+        <div className="flex gap-1 border-b border-ink/10 mb-6 overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0">
           {TABS.filter(
             (t) => t.id !== "pricing" || draft.product_type === "text_by_page",
           ).map((t) => (
@@ -174,7 +174,7 @@ export default function CrmProductEditorPage({
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={`px-4 py-2.5 text-[13px] tracking-wide border-b-2 -mb-px transition-colors cursor-pointer ${
+              className={`px-4 py-2.5 text-[13px] tracking-wide border-b-2 -mb-px transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                 tab === t.id
                   ? "border-gold text-ink font-medium"
                   : "border-transparent text-muted hover:text-ink"

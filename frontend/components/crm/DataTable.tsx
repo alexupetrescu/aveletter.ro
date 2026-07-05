@@ -21,7 +21,7 @@ export function SearchInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="border border-ink/15 rounded-sm px-3 py-2 text-sm bg-white/70 focus:outline-none focus:border-gold w-64 max-w-full"
+      className="border border-ink/15 rounded-sm px-3 py-2 text-sm bg-white/70 focus:outline-none focus:border-gold w-full sm:w-64 max-w-full"
     />
   );
 }
@@ -80,9 +80,70 @@ export function DataTable<T>({
   onPageChange?: (page: number) => void;
   totalCount?: number;
 }) {
+  const pagination =
+    page !== undefined && onPageChange && (hasPrevious || hasNext) ? (
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3 border-t border-ink/10 text-[12px] text-muted">
+        <span>{totalCount !== undefined ? `${totalCount} rezultate` : ""}</span>
+        <span className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={!hasPrevious}
+            onClick={() => onPageChange(page - 1)}
+            className="disabled:opacity-30 hover:text-ink cursor-pointer py-1"
+          >
+            ← Înapoi
+          </button>
+          <span>Pagina {page}</span>
+          <button
+            type="button"
+            disabled={!hasNext}
+            onClick={() => onPageChange(page + 1)}
+            className="disabled:opacity-30 hover:text-ink cursor-pointer py-1"
+          >
+            Înainte →
+          </button>
+        </span>
+      </div>
+    ) : null;
+
   return (
     <div className="bg-white/70 border border-ink/10 rounded-sm overflow-hidden">
-      <div className="overflow-x-auto">
+      {/* Mobile: card list */}
+      <div className="lg:hidden divide-y divide-ink/5">
+        {isLoading && rows.length === 0 && (
+          <p className="px-4 py-10 text-center text-muted text-[13px]">Se încarcă…</p>
+        )}
+        {!isLoading && rows.length === 0 && (
+          <p className="px-4 py-10 text-center text-muted text-[13px]">{empty}</p>
+        )}
+        {rows.map((row) => (
+          <div
+            key={rowKey(row)}
+            onClick={onRowClick ? () => onRowClick(row) : undefined}
+            className={`px-4 py-3.5 space-y-1.5 ${
+              onRowClick ? "cursor-pointer active:bg-gold/5" : ""
+            }`}
+          >
+            {columns.map((col, i) => (
+              <div
+                key={col.key}
+                className={`flex items-start justify-between gap-3 text-sm ${
+                  i === 0 ? "font-medium" : ""
+                } ${col.className?.includes("text-right") ? "flex-row-reverse text-right" : ""}`}
+              >
+                <span className="text-[11px] tracking-[0.12em] uppercase text-muted shrink-0 pt-0.5">
+                  {col.header}
+                </span>
+                <span className="min-w-0 text-right">{col.render(row)}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+        {pagination}
+      </div>
+
+      {/* Desktop: table */}
+      <div className="hidden lg:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-ink/10 bg-paper/60">
@@ -128,31 +189,8 @@ export function DataTable<T>({
             ))}
           </tbody>
         </table>
+        {pagination}
       </div>
-      {page !== undefined && onPageChange && (hasPrevious || hasNext) && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-ink/10 text-[12px] text-muted">
-          <span>{totalCount !== undefined ? `${totalCount} rezultate` : ""}</span>
-          <span className="flex items-center gap-3">
-            <button
-              type="button"
-              disabled={!hasPrevious}
-              onClick={() => onPageChange(page - 1)}
-              className="disabled:opacity-30 hover:text-ink cursor-pointer"
-            >
-              ← Înapoi
-            </button>
-            <span>Pagina {page}</span>
-            <button
-              type="button"
-              disabled={!hasNext}
-              onClick={() => onPageChange(page + 1)}
-              className="disabled:opacity-30 hover:text-ink cursor-pointer"
-            >
-              Înainte →
-            </button>
-          </span>
-        </div>
-      )}
     </div>
   );
 }
