@@ -1,0 +1,43 @@
+import Link from "next/link";
+import type { ProductListItem } from "@/lib/api";
+import { formatBani } from "@/lib/money";
+import PhotoBox from "./PhotoBox";
+
+export default function ProductCard({
+  product,
+  showCategory = false,
+}: {
+  product: ProductListItem;
+  showCategory?: boolean;
+}) {
+  const priceLabel =
+    product.product_type === "text_by_page" || product.product_type === "custom_quote"
+      ? "preț personalizat"
+      : formatBani(product.base_price_amount, product.currency);
+
+  return (
+    <Link href={`/shop/${product.slug}`} className="avelink block">
+      <div className="relative mb-5">
+        <PhotoBox
+          asset={product.featured_image}
+          label={`foto: ${product.title}`}
+          aspect="4/5"
+        />
+        {product.is_featured && (
+          <div className="absolute top-3.5 left-3.5 bg-ink px-3 py-1.5 text-[10px] tracking-[1.5px] text-paper">
+            ATELIER
+          </div>
+        )}
+      </div>
+      {showCategory && product.category && (
+        <div className="mb-1.5 text-[10.5px] tracking-[1.5px] text-olive uppercase">
+          {product.category.name}
+        </div>
+      )}
+      <h3 className="mb-2 font-serif text-[18.5px] font-medium text-ink">
+        {product.title}
+      </h3>
+      <span className="text-[13.5px] text-body">{priceLabel}</span>
+    </Link>
+  );
+}

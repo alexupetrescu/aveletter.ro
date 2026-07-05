@@ -18,3 +18,5 @@ frontend/.env.local
 docker-compose.dev.yml
 
 daily-dev.commands.md
+
+design/
