@@ -255,11 +255,14 @@ export default function ProductConfigurator({
     router,
   ]);
 
-  const gallery = product.gallery.length
-    ? product.gallery
-    : product.featured_image
-      ? [product.featured_image]
-      : [];
+  const gallery = useMemo(() => {
+    const images = [];
+    if (product.featured_image) images.push(product.featured_image);
+    for (const asset of product.gallery) {
+      if (!images.some((img) => img.url === asset.url)) images.push(asset);
+    }
+    return images;
+  }, [product.featured_image, product.gallery]);
 
   const priceDisplay = quote
     ? formatBani(quote.unit_price_amount, quote.currency)

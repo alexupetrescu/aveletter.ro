@@ -54,7 +54,7 @@ class MediaAssetSerializer(serializers.ModelSerializer):
             "credit", "width", "height", "tags", "tag_ids", "created_at",
         ]
         read_only_fields = [
-            "original_filename", "mime_type", "size_bytes",
+            "kind", "original_filename", "mime_type", "size_bytes",
             "width", "height", "created_at",
         ]
         extra_kwargs = {"file": {"write_only": True, "required": False}}

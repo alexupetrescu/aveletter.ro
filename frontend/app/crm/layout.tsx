@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -91,19 +91,20 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     retry: false,
   });
 
+  useEffect(() => {
+    if (!isLogin && !isLoading && !user) {
+      router.replace("/crm/login");
+    }
+  }, [isLogin, isLoading, user, router]);
+
   if (isLogin) return <>{children}</>;
 
-  if (isLoading) {
+  if (isLoading || !user) {
     return (
       <div className="min-h-screen grid place-items-center text-muted text-sm">
         Se încarcă…
       </div>
     );
-  }
-
-  if (!user) {
-    router.replace("/crm/login");
-    return null;
   }
 
   return (

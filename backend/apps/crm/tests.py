@@ -128,6 +128,31 @@ class CrmAuthGatingTests(TestCase):
         self.assertIsNone(me_after.data["user"])
 
 
+class MediaUploadTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.staff = User.objects.create_user("staff", password="pw", is_staff=True)
+        self.client.force_authenticate(self.staff)
+
+    def test_upload_image_without_kind(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        png = SimpleUploadedFile(
+            "photo.png",
+            b"\x89PNG\r\n\x1a\n",
+            content_type="image/png",
+        )
+        response = self.client.post(
+            "/api/crm/media/",
+            {"file": png},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["kind"], "image")
+        self.assertEqual(response.data["original_filename"], "photo.png")
+        self.assertEqual(response.data["mime_type"], "image/png")
+
+
 class RichTextSyncTests(TestCase):
     def setUp(self):
         self.client = APIClient()
