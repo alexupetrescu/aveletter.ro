@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.blog.models import Category as BlogCategory
+from apps.blog.models import AuthorProfile, Category as BlogCategory
 from apps.blog.models import Post, PostRevision, SlugRedirect, Tag
 from apps.core.richtext import extract_text
 from apps.media_library.models import MediaAsset, MediaTag
@@ -198,8 +198,8 @@ class TextByPagePricingCrmSerializer(serializers.ModelSerializer):
         model = TextByPagePricing
         fields = [
             "id", "product", "text_field_key", "pricing_mode", "words_per_page",
-            "price_per_unit_amount", "minimum_pages", "maximum_pages",
-            "setup_fee_amount", "round_up",
+            "average_words_per_page", "price_per_unit_amount", "minimum_pages",
+            "maximum_pages", "setup_fee_amount", "round_up",
         ]
 
     def validate(self, attrs):
@@ -404,6 +404,25 @@ class PostCrmDetailSerializer(PostCrmListSerializer):
                 created_by=request.user,
             )
         return instance
+
+
+class AuthorProfileCrmSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(source="user.id", read_only=True)
+    user_name = serializers.SerializerMethodField()
+    photo_data = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AuthorProfile
+        fields = [
+            "id", "user_id", "user_name", "photo", "photo_data",
+            "bio", "instagram_url", "facebook_url",
+        ]
+
+    def get_user_name(self, obj):
+        return obj.user.get_full_name() or obj.user.get_username()
+
+    def get_photo_data(self, obj):
+        return asset_summary(obj.photo, self.context.get("request"))
 
 
 # ---------------------------------------------------------------------------

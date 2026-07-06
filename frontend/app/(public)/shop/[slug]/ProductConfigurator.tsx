@@ -334,15 +334,21 @@ export default function ProductConfigurator({
 
   const priceDisplay = quote
     ? formatBani(quote.unit_price_amount, quote.currency)
-    : product.product_type === "text_by_page"
-      ? "—"
-      : formatBani(product.base_price_amount, product.currency);
+    : formatBani(
+        product.variants.find((v) => v.id === variantId)?.effective_price_amount ??
+          product.base_price_amount,
+        product.currency,
+      );
 
-  const pages = quote?.breakdown.pages;
   const wordCount = quote?.breakdown.word_count;
   const charCount = quote?.breakdown.char_count;
+  const estimatedPages = quote?.breakdown.estimated_pages;
   const pricingMode = quote?.breakdown.pricing_mode;
-  const extraPages = quote?.breakdown.extra_pages;
+  const showTextStats =
+    product.product_type === "text_by_page" &&
+    quote &&
+    ((wordCount !== undefined && wordCount > 0) ||
+      (pricingMode === "per_character" && charCount !== undefined && charCount > 0));
 
   return (
     <div className="mx-auto grid max-w-[1440px] grid-cols-1 gap-12 px-6 pt-10 pb-[110px] lg:grid-cols-2 lg:gap-20 lg:px-12">
@@ -400,51 +406,25 @@ export default function ProductConfigurator({
             <span className="ml-3 text-[12px] text-stone">se calculează…</span>
           )}
         </div>
-        {product.product_type === "text_by_page" &&
-          quote &&
-          wordCount !== undefined &&
-          pricingMode !== "per_character" &&
-          pricingMode !== "per_word" &&
-          pricingMode !== "per_word_block" && (
-            <div className="mb-6 -mt-4 text-[13px] text-muted">
-              {wordCount} cuvinte · {pages}{" "}
-              {pages === 1 ? "pagină" : "pagini"} caligrafiate
-              {extraPages !== undefined && extraPages > 0 && (
-                <> · {extraPages} pagini suplimentare tarifate</>
-              )}
-            </div>
-          )}
-        {product.product_type === "text_by_page" &&
-          quote &&
-          pricingMode === "per_word" &&
-          wordCount !== undefined && (
-            <div className="mb-6 -mt-4 text-[13px] text-muted">
-              {wordCount} cuvinte tarifate
-            </div>
-          )}
-        {product.product_type === "text_by_page" &&
-          quote &&
-          pricingMode === "per_word_block" &&
-          wordCount !== undefined && (
-            <div className="mb-6 -mt-4 text-[13px] text-muted">
-              {wordCount} cuvinte
-              {quote.breakdown.blocks !== undefined && (
-                <>
-                  {" "}
-                  · {quote.breakdown.blocks}{" "}
-                  {quote.breakdown.blocks === 1 ? "bloc" : "blocuri"} tarifate
-                </>
-              )}
-            </div>
-          )}
-        {product.product_type === "text_by_page" &&
-          quote &&
-          pricingMode === "per_character" &&
-          charCount !== undefined && (
-            <div className="mb-6 -mt-4 text-[13px] text-muted">
-              {charCount} caractere tarifate
-            </div>
-          )}
+        {showTextStats && (
+          <div className="mb-6 -mt-4 text-[13px] text-muted">
+            {pricingMode === "per_character" && charCount !== undefined && charCount > 0 ? (
+              <span>{charCount} caractere</span>
+            ) : wordCount !== undefined && wordCount > 0 ? (
+              <span>{wordCount} cuvinte</span>
+            ) : null}
+            {estimatedPages !== undefined && estimatedPages > 0 && (
+              <span>
+                {(pricingMode === "per_character" && charCount) ||
+                (wordCount !== undefined && wordCount > 0)
+                  ? " · "
+                  : ""}
+                {estimatedPages}{" "}
+                {estimatedPages === 1 ? "pagină estimată" : "pagini estimate"}
+              </span>
+            )}
+          </div>
+        )}
         {quoteErrors.length > 0 && (
           <div className="mb-6 -mt-3 text-[13px] text-[#a03030]">
             {quoteErrors.join(" ")}

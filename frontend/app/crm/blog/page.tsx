@@ -35,6 +35,12 @@ export default function CrmBlogPage() {
               Categorii & etichete
             </Link>
             <Link
+              href="/crm/blog/authors"
+              className="avelink text-[13px] text-olive self-center mr-2"
+            >
+              Autori
+            </Link>
+            <Link
               href="/crm/redirects"
               className="avelink text-[13px] text-olive self-center mr-2"
             >

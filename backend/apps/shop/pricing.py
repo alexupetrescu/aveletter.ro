@@ -79,7 +79,7 @@ def _validate_options(product, selected_options):
             )
 
 
-def _validate_inputs(product, inputs):
+def _validate_inputs(product, inputs, *, preview=False):
     """Enforce required flags and char/word limits declared on input fields."""
     for input_field in product.input_fields.all():
         value = inputs.get(input_field.key)
@@ -91,6 +91,8 @@ def _validate_inputs(product, inputs):
             or input_field.required
         )
         if must_have_value and not text.strip():
+            if preview:
+                continue
             raise ValidationError(f"„{input_field.label}” este obligatoriu.")
         if not text:
             continue
@@ -120,6 +122,13 @@ def _validate_inputs(product, inputs):
                 raise ValidationError(f"„{input_field.label}” are un format invalid.")
 
 
+def _estimate_pages(word_count: int, words_per_page: int, *, round_up: bool) -> int:
+    if not words_per_page or word_count <= 0:
+        return 0
+    raw = word_count / words_per_page
+    return math.ceil(raw) if round_up else int(raw)
+
+
 def _effective_setup_fee(pricing, base_amount: int) -> int:
     """When setup fee is 0, fall back to the product base price."""
     if pricing.setup_fee_amount > 0:
@@ -136,10 +145,18 @@ def _compute_text_pricing(pricing, text: str, *, base_amount: int) -> tuple[int,
     mode = pricing.pricing_mode
     setup = _effective_setup_fee(pricing, base_amount)
 
+    estimated_pages = 0
+    if pricing.average_words_per_page:
+        estimated_pages = _estimate_pages(
+            word_count,
+            pricing.average_words_per_page,
+            round_up=pricing.round_up,
+        )
+
     if mode == TextByPagePricing.PricingMode.PER_WORD:
         unit_count = word_count
         text_amount = setup + unit_count * pricing.price_per_unit_amount
-        return text_amount, {
+        item = {
             "type": "text_pricing",
             "pricing_mode": mode,
             "word_count": word_count,
@@ -148,6 +165,9 @@ def _compute_text_pricing(pricing, text: str, *, base_amount: int) -> tuple[int,
             "setup_fee_amount": setup,
             "amount": text_amount,
         }
+        if estimated_pages:
+            item["estimated_pages"] = estimated_pages
+        return text_amount, item
 
     if mode == TextByPagePricing.PricingMode.PER_WORD_BLOCK:
         block_size = pricing.words_per_page
@@ -156,7 +176,7 @@ def _compute_text_pricing(pricing, text: str, *, base_amount: int) -> tuple[int,
         blocks = max(blocks, 1) if word_count > 0 else 0
         extra_blocks = max(0, blocks - 1)
         text_amount = setup + extra_blocks * pricing.price_per_unit_amount
-        return text_amount, {
+        item = {
             "type": "text_pricing",
             "pricing_mode": mode,
             "word_count": word_count,
@@ -167,11 +187,14 @@ def _compute_text_pricing(pricing, text: str, *, base_amount: int) -> tuple[int,
             "setup_fee_amount": setup,
             "amount": text_amount,
         }
+        if estimated_pages:
+            item["estimated_pages"] = estimated_pages
+        return text_amount, item
 
     if mode == TextByPagePricing.PricingMode.PER_CHARACTER:
         unit_count = char_count
         text_amount = setup + unit_count * pricing.price_per_unit_amount
-        return text_amount, {
+        item = {
             "type": "text_pricing",
             "pricing_mode": mode,
             "char_count": char_count,
@@ -180,6 +203,9 @@ def _compute_text_pricing(pricing, text: str, *, base_amount: int) -> tuple[int,
             "setup_fee_amount": setup,
             "amount": text_amount,
         }
+        if estimated_pages:
+            item["estimated_pages"] = estimated_pages
+        return text_amount, item
 
     # per_page — first page included in base product price
     setup = pricing.setup_fee_amount  # per-page setup does not fall back to base
@@ -196,6 +222,7 @@ def _compute_text_pricing(pricing, text: str, *, base_amount: int) -> tuple[int,
         "word_count": word_count,
         "words_per_page": pricing.words_per_page,
         "pages": pages,
+        "estimated_pages": pages,
         "extra_pages": extra_pages,
         "setup_fee_amount": setup,
         "price_per_unit_amount": pricing.price_per_unit_amount,
@@ -204,13 +231,13 @@ def _compute_text_pricing(pricing, text: str, *, base_amount: int) -> tuple[int,
 
 
 def quote_product(product, *, variant=None, selected_options=None, inputs=None,
-                  validate=True):
+                  validate=True, preview=False):
     selected_options = list(selected_options or [])
     inputs = inputs or {}
 
     if validate:
         _validate_options(product, selected_options)
-        _validate_inputs(product, inputs)
+        _validate_inputs(product, inputs, preview=preview)
 
     base_amount = (
         variant.effective_price_amount
@@ -247,12 +274,21 @@ def quote_product(product, *, variant=None, selected_options=None, inputs=None,
             normalized["_estimated_pages"] = item["pages"]
             breakdown["word_count"] = item["word_count"]
             breakdown["pages"] = item["pages"]
+            breakdown["estimated_pages"] = item.get("estimated_pages", item["pages"])
             breakdown["extra_pages"] = item.get("extra_pages", 0)
         elif "blocks" in item:
             breakdown["word_count"] = item["word_count"]
             breakdown["blocks"] = item["blocks"]
             breakdown["extra_blocks"] = item.get("extra_blocks", 0)
             breakdown["words_per_block"] = item.get("words_per_block")
+            if item.get("estimated_pages"):
+                normalized["_estimated_pages"] = item["estimated_pages"]
+                breakdown["estimated_pages"] = item["estimated_pages"]
+        elif item.get("estimated_pages"):
+            normalized["_estimated_pages"] = item["estimated_pages"]
+            breakdown["estimated_pages"] = item["estimated_pages"]
+        if "word_count" in item and "word_count" not in breakdown:
+            breakdown["word_count"] = item["word_count"]
         if "char_count" in item:
             normalized["_char_count"] = item["char_count"]
             breakdown["char_count"] = item["char_count"]

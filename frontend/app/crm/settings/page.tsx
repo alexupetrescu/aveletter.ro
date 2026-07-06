@@ -359,7 +359,7 @@ function HomeHeroPanel() {
 function TaxPanel() {
   const toast = useToast();
   const qc = useQueryClient();
-  const { data: config } = useCrmSingleton<CrmTaxConfig>("tax-config");
+  const { data: config, isLoading, isError } = useCrmSingleton<CrmTaxConfig>("tax-config");
   const { data: rates } = useCrmList<CrmVatRate[]>("vat-rates");
   const [draft, setDraft] = useState<Partial<CrmTaxConfig>>({});
   const [saving, setSaving] = useState(false);
@@ -383,10 +383,20 @@ function TaxPanel() {
     }
   }
 
-  if (!config) {
+  if (isLoading) {
     return (
       <Card title="TVA & identitate fiscală">
         <p className="text-muted text-sm">Se încarcă…</p>
+      </Card>
+    );
+  }
+
+  if (isError || !config) {
+    return (
+      <Card title="TVA & identitate fiscală">
+        <p className="text-muted text-sm">
+          Configurația fiscală nu a putut fi încărcată. Reîncarcă pagina.
+        </p>
       </Card>
     );
   }

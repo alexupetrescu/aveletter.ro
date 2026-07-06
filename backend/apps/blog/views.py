@@ -10,7 +10,9 @@ class PostListView(generics.ListAPIView):
     def get_queryset(self):
         qs = (
             Post.objects.live()
-            .select_related("category", "author", "featured_image")
+            .select_related(
+                "category", "author", "author__author_profile__photo", "featured_image",
+            )
             .prefetch_related("tags")
         )
         category = self.request.query_params.get("category")
@@ -29,6 +31,9 @@ class PostDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         return (
             Post.objects.live()
-            .select_related("category", "author", "featured_image", "og_image")
+            .select_related(
+                "category", "author", "author__author_profile__photo",
+                "featured_image", "og_image",
+            )
             .prefetch_related("tags")
         )

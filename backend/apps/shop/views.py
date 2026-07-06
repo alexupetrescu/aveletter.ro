@@ -87,6 +87,7 @@ class ProductQuoteView(APIView):
                 variant=variant,
                 selected_options=options,
                 inputs=data.get("inputs", {}),
+                preview=True,
             )
         except ValidationError as exc:
             return Response({"errors": exc.messages}, status=400)

@@ -88,3 +88,24 @@ class SlugRedirect(models.Model):
 
     def __str__(self):
         return f"{self.old_path} -> {self.new_path}"
+
+
+class AuthorProfile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="author_profile",
+    )
+    photo = models.ForeignKey(
+        "media_library.MediaAsset", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="+",
+    )
+    bio = models.TextField(blank=True)
+    instagram_url = models.URLField(blank=True)
+    facebook_url = models.URLField(blank=True)
+
+    class Meta:
+        verbose_name = "author profile"
+        verbose_name_plural = "author profiles"
+
+    def __str__(self):
+        return self.user.get_full_name() or self.user.get_username()

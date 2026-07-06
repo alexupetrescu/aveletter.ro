@@ -67,7 +67,23 @@ class TaxConfig(models.Model):
 
     @classmethod
     def get_solo(cls):
-        return cls.objects.select_related("default_vat_rate").first()
+        config = cls.objects.select_related("default_vat_rate").first()
+        if config is not None:
+            return config
+        exempt, _ = VatRate.objects.get_or_create(
+            name="Neplătitor de TVA",
+            defaults={
+                "rate_bp": 0,
+                "is_exempt": True,
+                "legal_mention": "Neplătitor de TVA conform art. 310 din Codul Fiscal",
+            },
+        )
+        return cls.objects.create(
+            vat_enabled=False,
+            prices_include_vat=True,
+            default_vat_rate=exempt,
+            legal_name="Ave Letter Studio",
+        )
 
 
 # ---------------------------------------------------------------------------

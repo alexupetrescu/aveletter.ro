@@ -258,6 +258,14 @@ class TextByPagePricing(models.Model):
         default=PricingMode.PER_PAGE,
     )
     words_per_page = models.PositiveIntegerField(default=100)
+    average_words_per_page = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Cuvinte pe pagină în medie — folosit doar pentru estimarea paginilor "
+            "afișată clientului (mod „Pe X cuvinte”)."
+        ),
+    )
     price_per_unit_amount = models.PositiveIntegerField(
         help_text="In bani. Preț pe pagină/cuvânt/caracter (după prima pagină, la mod pagină).",
     )

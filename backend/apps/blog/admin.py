@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Category, Post, PostRevision, SlugRedirect, Tag
+from .models import AuthorProfile, Category, Post, PostRevision, SlugRedirect, Tag
 
 
 @admin.register(Category)
@@ -59,3 +59,18 @@ class PostAdmin(admin.ModelAdmin):
 class SlugRedirectAdmin(admin.ModelAdmin):
     list_display = ["old_path", "new_path", "created_at"]
     search_fields = ["old_path", "new_path"]
+
+
+@admin.register(AuthorProfile)
+class AuthorProfileAdmin(admin.ModelAdmin):
+    list_display = ["user", "has_photo", "has_bio"]
+    search_fields = ["user__username", "user__first_name", "user__last_name", "bio"]
+    raw_id_fields = ["user", "photo"]
+
+    @admin.display(boolean=True, description="Photo")
+    def has_photo(self, obj):
+        return bool(obj.photo_id)
+
+    @admin.display(boolean=True, description="Bio")
+    def has_bio(self, obj):
+        return bool(obj.bio)

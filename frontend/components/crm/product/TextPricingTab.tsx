@@ -59,6 +59,7 @@ export default function TextPricingTab({
         text_field_key: inputFields.find((f) => f.field_type === "long_text")?.key ?? "",
         pricing_mode: "per_page",
         words_per_page: 100,
+        average_words_per_page: null,
         price_per_unit_amount: 0,
         minimum_pages: 1,
         setup_fee_amount: 0,
@@ -141,12 +142,48 @@ export default function TextPricingTab({
               </Field>
             )}
             {mode === "per_word_block" && (
-              <Field label="Număr de cuvinte" hint="Ex.: 100 cuvinte = un bloc tarifat.">
+              <>
+                <Field label="Număr de cuvinte" hint="Ex.: 100 cuvinte = un bloc tarifat.">
+                  <TextInput
+                    type="number"
+                    min={1}
+                    value={draft.words_per_page ?? 100}
+                    onChange={(e) => patch({ words_per_page: Number(e.target.value) })}
+                  />
+                </Field>
+                <Field
+                  label="Cuvinte pe pagină în medie"
+                  hint="Folosit doar pentru estimarea paginilor afișată clientului. Ex.: 281 cuvinte la 140/pagină ≈ 2 pagini."
+                >
+                  <TextInput
+                    type="number"
+                    min={1}
+                    value={draft.average_words_per_page ?? ""}
+                    onChange={(e) =>
+                      patch({
+                        average_words_per_page:
+                          e.target.value === "" ? null : Number(e.target.value),
+                      })
+                    }
+                  />
+                </Field>
+              </>
+            )}
+            {(mode === "per_word" || mode === "per_character") && (
+              <Field
+                label="Cuvinte pe pagină în medie"
+                hint="Opțional — afișează o estimare de pagini lângă numărul de cuvinte."
+              >
                 <TextInput
                   type="number"
                   min={1}
-                  value={draft.words_per_page ?? 100}
-                  onChange={(e) => patch({ words_per_page: Number(e.target.value) })}
+                  value={draft.average_words_per_page ?? ""}
+                  onChange={(e) =>
+                    patch({
+                      average_words_per_page:
+                        e.target.value === "" ? null : Number(e.target.value),
+                    })
+                  }
                 />
               </Field>
             )}

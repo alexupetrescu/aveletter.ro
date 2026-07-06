@@ -27,24 +27,52 @@ def _asset_data(asset, request=None):
     }
 
 
+class AuthorSerializer(serializers.Serializer):
+    name = serializers.SerializerMethodField()
+    photo = serializers.SerializerMethodField()
+    bio = serializers.SerializerMethodField()
+    socials = serializers.SerializerMethodField()
+
+    def get_name(self, user):
+        return user.get_full_name() or user.get_username()
+
+    def get_photo(self, user):
+        profile = getattr(user, "author_profile", None)
+        if profile and profile.photo_id:
+            return _asset_data(profile.photo, self.context.get("request"))
+        return None
+
+    def get_bio(self, user):
+        profile = getattr(user, "author_profile", None)
+        return profile.bio if profile else ""
+
+    def get_socials(self, user):
+        profile = getattr(user, "author_profile", None)
+        if not profile:
+            return {}
+        socials = {}
+        if profile.instagram_url:
+            socials["instagram"] = profile.instagram_url
+        if profile.facebook_url:
+            socials["facebook"] = profile.facebook_url
+        return socials
+
+
 class PostListSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     featured_image = serializers.SerializerMethodField()
-    author_name = serializers.SerializerMethodField()
+    author = AuthorSerializer(read_only=True)
 
     class Meta:
         model = Post
         fields = [
             "title", "slug", "excerpt", "reading_time", "published_at",
-            "category", "tags", "featured_image", "author_name",
+            "category", "tags", "featured_image", "author",
         ]
 
     def get_featured_image(self, obj):
         return _asset_data(obj.featured_image, self.context.get("request"))
-
-    def get_author_name(self, obj):
-        return obj.author.get_full_name() or obj.author.get_username()
 
 
 class PostDetailSerializer(PostListSerializer):

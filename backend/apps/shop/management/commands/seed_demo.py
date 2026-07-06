@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from apps.blog.models import Category as BlogCategory
+from apps.blog.models import AuthorProfile, Category as BlogCategory
 from apps.blog.models import Post
 from apps.orders.models import InvoiceSeries, TaxConfig, VatRate
 from apps.shop.models import (
@@ -218,8 +218,17 @@ class Command(BaseCommand):
             author = User.objects.filter(is_superuser=True).first() or User.objects.first()
             if author is None:
                 author = User.objects.create_user(
-                    username="adina", first_name="Adina",
+                    username="adina", first_name="Adina", last_name="Petrescu",
                 )
+            AuthorProfile.objects.get_or_create(
+                user=author,
+                defaults={
+                    "bio": (
+                        "Caligrafiază de aproximativ 5 ani și conduce Ave Letter Studio, "
+                        "un atelier de cadouri personalizate."
+                    ),
+                },
+            )
             inspiratie, _ = BlogCategory.objects.get_or_create(
                 slug="inspiratie", defaults={"name": "Inspirație"},
             )

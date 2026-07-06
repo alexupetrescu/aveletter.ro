@@ -86,7 +86,7 @@ export default async function PostPage({
           {post.title}
         </h1>
         <div className="font-script text-2xl text-muted">
-          de {post.author_name}, Ave Letter Studio
+          de {post.author.name}, Ave Letter Studio
         </div>
       </div>
 
@@ -118,17 +118,51 @@ export default async function PostPage({
 
       {/* AUTHOR */}
       <div className="mx-auto flex max-w-[700px] items-center gap-6 border-t border-ink/10 px-6 pt-11 pb-[90px] lg:px-12">
-        <div className="photo-placeholder size-16 shrink-0 rounded-full">
-          <span className="font-mono text-[8px] text-stone">[ foto ]</span>
-        </div>
+        {post.author.photo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={post.author.photo.url}
+            alt={post.author.photo.alt_text || post.author.name}
+            className="size-16 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <div className="photo-placeholder size-16 shrink-0 rounded-full">
+            <span className="font-mono text-[8px] text-stone">[ foto ]</span>
+          </div>
+        )}
         <div>
           <div className="mb-1 font-serif text-[19px] font-medium">
-            {post.author_name}
+            {post.author.name}
           </div>
-          <div className="text-[13px] leading-[1.7] text-muted">
-            Caligrafiază de aproximativ 5 ani și conduce Ave Letter Studio, un
-            atelier de cadouri personalizate.
-          </div>
+          {post.author.bio && (
+            <div className="text-[13px] leading-[1.7] text-muted">
+              {post.author.bio}
+            </div>
+          )}
+          {Object.keys(post.author.socials).length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-4 text-[12px]">
+              {post.author.socials.instagram && (
+                <a
+                  href={post.author.socials.instagram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="avelink text-olive"
+                >
+                  Instagram
+                </a>
+              )}
+              {post.author.socials.facebook && (
+                <a
+                  href={post.author.socials.facebook}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="avelink text-olive"
+                >
+                  Facebook
+                </a>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

@@ -20,6 +20,7 @@ router.register("posts", views.PostViewSet)
 router.register("blog-categories", views.BlogCategoryViewSet)
 router.register("tags", views.TagViewSet)
 router.register("redirects", views.SlugRedirectViewSet)
+router.register("author-profiles", views.AuthorProfileViewSet, basename="author-profile")
 # Media
 router.register("media", views.MediaAssetViewSet)
 router.register("media-tags", views.MediaTagViewSet)

@@ -210,10 +210,6 @@ def create_order_from_cart(
 
     tax_config = TaxConfig.get_solo()
 
-    if tax_config is None:
-
-        raise CheckoutError("Configurația fiscală lipsește. Rulează comanda seed.")
-
 
 
     billing = Address.objects.create(**billing_address_data)

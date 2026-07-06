@@ -134,6 +134,26 @@ class QuoteProductTests(TestCase):
         with self.assertRaises(ValidationError):
             quote_product(product, inputs={"message_text": "   "})
 
+    def test_preview_quote_allows_blank_text_and_returns_base_price(self):
+        product = make_product(
+            product_type=Product.ProductType.TEXT_BY_PAGE,
+            base_price_amount=21000,
+        )
+        ProductInputField.objects.create(
+            product=product, key="message_text", label="Textul dorit",
+            field_type=ProductInputField.FieldType.LONG_TEXT, required=False,
+        )
+        TextByPagePricing.objects.create(
+            product=product,
+            text_field_key="message_text",
+            pricing_mode=TextByPagePricing.PricingMode.PER_WORD_BLOCK,
+            words_per_page=100,
+            price_per_unit_amount=3500,
+            setup_fee_amount=0,
+        )
+        quote = quote_product(product, inputs={"message_text": ""}, preview=True)
+        self.assertEqual(quote.unit_price_amount, 21000)
+
     def test_max_words_enforced(self):
         product = make_product()
         ProductInputField.objects.create(
@@ -213,6 +233,7 @@ class TextPerWordBlockTests(TestCase):
             text_field_key="message_text",
             pricing_mode=TextByPagePricing.PricingMode.PER_WORD_BLOCK,
             words_per_page=100,
+            average_words_per_page=140,
             price_per_unit_amount=3500,
             setup_fee_amount=0,
         )
@@ -232,6 +253,13 @@ class TextPerWordBlockTests(TestCase):
         self.assertEqual(quote.breakdown["blocks"], 3)
         self.assertEqual(quote.breakdown["extra_blocks"], 2)
         self.assertEqual(quote.unit_price_amount, 3500 + 2 * 3500)
+
+    def test_estimated_pages_use_average_words_per_page(self):
+        quote = self.quote_words(281)
+        self.assertEqual(quote.breakdown["blocks"], 3)
+        self.assertEqual(quote.breakdown["estimated_pages"], 3)
+        quote = self.quote_words(140)
+        self.assertEqual(quote.breakdown["estimated_pages"], 1)
 
 
 class TextPerWordSetupFallbackTests(TestCase):
@@ -287,6 +315,33 @@ class ProductQuoteApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["unit_price_amount"], 5000)
+
+    def test_quote_preview_allows_blank_text_for_text_by_page(self):
+        product = make_product(
+            slug="letter-preview",
+            product_type=Product.ProductType.TEXT_BY_PAGE,
+            base_price_amount=21000,
+        )
+        ProductInputField.objects.create(
+            product=product, key="message_text", label="Textul dorit",
+            field_type=ProductInputField.FieldType.LONG_TEXT, required=False,
+        )
+        TextByPagePricing.objects.create(
+            product=product,
+            text_field_key="message_text",
+            pricing_mode=TextByPagePricing.PricingMode.PER_WORD_BLOCK,
+            words_per_page=100,
+            average_words_per_page=140,
+            price_per_unit_amount=3500,
+            setup_fee_amount=0,
+        )
+        response = self.client.post(
+            f"/api/shop/products/{product.slug}/quote/",
+            {"inputs": {"message_text": ""}},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["unit_price_amount"], 21000)
 
 
 class RecommendationTests(TestCase):

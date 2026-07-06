@@ -141,6 +141,7 @@ export interface CrmTextPricing {
   text_field_key: string;
   pricing_mode: "per_page" | "per_word" | "per_word_block" | "per_character";
   words_per_page: number;
+  average_words_per_page: number | null;
   price_per_unit_amount: number;
   minimum_pages: number;
   maximum_pages: number | null;
@@ -255,6 +256,17 @@ export interface CrmPostDetail extends CrmPostList {
   seo_description: string;
   canonical_url: string;
   noindex: boolean;
+}
+
+export interface CrmAuthorProfile {
+  id: number | null;
+  user_id: number;
+  user_name: string;
+  photo: number | null;
+  photo_data: AssetSummary | null;
+  bio: string;
+  instagram_url: string;
+  facebook_url: string;
 }
 
 export interface CrmAddress {

@@ -120,6 +120,7 @@ export interface QuoteResponse {
     blocks?: number;
     extra_blocks?: number;
     words_per_block?: number;
+    estimated_pages?: number;
     char_count?: number;
   };
   warnings: string[];
@@ -154,6 +155,13 @@ export interface SiteConfigData {
   hero: HomeHeroData;
 }
 
+export interface PostAuthor {
+  name: string;
+  photo: AssetData | null;
+  bio: string;
+  socials: Partial<Record<"instagram" | "facebook", string>>;
+}
+
 export interface PostListItem {
   title: string;
   slug: string;
@@ -163,7 +171,7 @@ export interface PostListItem {
   category: { name: string; slug: string; description: string } | null;
   tags: Array<{ name: string; slug: string }>;
   featured_image: AssetData | null;
-  author_name: string;
+  author: PostAuthor;
 }
 
 export interface PostDetail extends PostListItem {

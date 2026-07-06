@@ -1,4 +1,5 @@
-from django.db.models import Count, Q, Sum
+from django.contrib.auth import get_user_model
+from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
@@ -6,7 +7,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.blog.models import Category as BlogCategory
+from apps.blog.models import AuthorProfile, Category as BlogCategory
 from apps.blog.models import Post, SlugRedirect, Tag
 from apps.media_library.models import MediaAsset, MediaTag
 from apps.orders.models import (
@@ -204,6 +205,77 @@ class SlugRedirectViewSet(CrmViewSet):
     serializer_class = s.SlugRedirectCrmSerializer
 
 
+class AuthorProfileViewSet(viewsets.ViewSet):
+    """Staff author profiles keyed by Django user id."""
+
+    authentication_classes = CRM_AUTHENTICATION
+    permission_classes = [IsStaff]
+
+    def _staff_users(self):
+        User = get_user_model()
+        return User.objects.filter(is_staff=True).order_by(
+            F("first_name").asc(nulls_last=True), "username",
+        )
+
+    def list(self, request):
+        staff = list(self._staff_users())
+        profiles = {
+            p.user_id: p
+            for p in AuthorProfile.objects.select_related("photo").filter(
+                user__in=staff,
+            )
+        }
+        data = []
+        for user in staff:
+            profile = profiles.get(user.pk)
+            if profile:
+                row = s.AuthorProfileCrmSerializer(
+                    profile, context={"request": request},
+                ).data
+            else:
+                row = {
+                    "id": None,
+                    "user_id": user.pk,
+                    "user_name": user.get_full_name() or user.get_username(),
+                    "photo": None,
+                    "photo_data": None,
+                    "bio": "",
+                    "instagram_url": "",
+                    "facebook_url": "",
+                }
+            data.append(row)
+        return Response(data)
+
+    def retrieve(self, request, pk=None):
+        User = get_user_model()
+        user = User.objects.filter(pk=pk, is_staff=True).first()
+        if user is None:
+            return Response(status=404)
+        profile, _ = AuthorProfile.objects.get_or_create(user=user)
+        profile = AuthorProfile.objects.select_related("user", "photo").get(
+            pk=profile.pk,
+        )
+        return Response(
+            s.AuthorProfileCrmSerializer(profile, context={"request": request}).data,
+        )
+
+    def partial_update(self, request, pk=None):
+        User = get_user_model()
+        user = User.objects.filter(pk=pk, is_staff=True).first()
+        if user is None:
+            return Response(status=404)
+        profile, _ = AuthorProfile.objects.get_or_create(user=user)
+        profile = AuthorProfile.objects.select_related("user", "photo").get(
+            pk=profile.pk,
+        )
+        serializer = s.AuthorProfileCrmSerializer(
+            profile, data=request.data, partial=True, context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
 # ---------------------------------------------------------------------------
 # Media
 # ---------------------------------------------------------------------------
@@ -326,15 +398,10 @@ class TaxConfigView(APIView):
     permission_classes = [IsStaff]
 
     def get(self, request):
-        config = TaxConfig.objects.select_related("default_vat_rate").first()
-        if config is None:
-            return Response({"detail": "Not configured."}, status=404)
-        return Response(s.TaxConfigCrmSerializer(config).data)
+        return Response(s.TaxConfigCrmSerializer(TaxConfig.get_solo()).data)
 
     def patch(self, request):
-        config = TaxConfig.objects.first()
-        if config is None:
-            return Response({"detail": "Not configured."}, status=404)
+        config = TaxConfig.get_solo()
         serializer = s.TaxConfigCrmSerializer(config, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
