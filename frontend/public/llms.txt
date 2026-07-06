@@ -3,7 +3,7 @@
 > Cadouri și obiecte personalizate prin caligrafie, create manual într-un atelier din România.
 
 Site: https://aveletter.ro
-Contact: vezi pagina de contact sau emailul din footer
+Contact: adina@aveletter.ro · +40 746 986 415 · Râmnicu Vâlcea, România · /contact
 
 ## Despre
 
@@ -13,7 +13,8 @@ Ave Letter Studio este un atelier de caligrafie din România. Oferim cadouri per
 
 - Acasă: /
 - Produse: /shop
-- Blog: /blog
+- Jurnal: /blog
+- Contact: /contact
 
 ## Livrare
 

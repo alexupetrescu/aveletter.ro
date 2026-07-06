@@ -72,7 +72,10 @@ class Command(BaseCommand):
         if not SiteConfig.objects.exists():
             SiteConfig.objects.create(
                 site_name="Ave Letter Studio",
-                contact_email="contact@aveletter.ro",
+                contact_email="adina@aveletter.ro",
+                contact_phone="+40746986415",
+                instagram_url="https://www.instagram.com/aveletterstudio/",
+                facebook_url="https://www.facebook.com/aveletterstudio/",
             )
 
         # --- Categories ---

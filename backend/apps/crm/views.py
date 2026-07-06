@@ -30,10 +30,11 @@ from apps.shop.models import (
 from apps.site_config.models import HomeHero, SiteConfig
 
 from . import serializers as s
-from .permissions import IsStaff
+from .permissions import CRM_AUTHENTICATION, IsStaff
 
 
 class CrmViewSet(viewsets.ModelViewSet):
+    authentication_classes = CRM_AUTHENTICATION
     permission_classes = [IsStaff]
 
     filter_fields: dict[str, str] = {}  # query param -> ORM lookup
@@ -201,6 +202,7 @@ class OrderViewSet(
 ):
     """Orders are frozen; only status and internal notes can change."""
 
+    authentication_classes = CRM_AUTHENTICATION
     permission_classes = [IsStaff]
     queryset = Order.objects.order_by("-created_at")
     lookup_field = "order_number"
@@ -245,18 +247,21 @@ class OrderViewSet(
 
 
 class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
+    authentication_classes = CRM_AUTHENTICATION
     permission_classes = [IsStaff]
     queryset = Invoice.objects.select_related("series", "order").order_by("-issued_at")
     serializer_class = s.InvoiceCrmSerializer
 
 
 class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
+    authentication_classes = CRM_AUTHENTICATION
     permission_classes = [IsStaff]
     queryset = Payment.objects.select_related("order").order_by("-created_at")
     serializer_class = s.PaymentCrmSerializer
 
 
 class CartViewSet(viewsets.ReadOnlyModelViewSet):
+    authentication_classes = CRM_AUTHENTICATION
     permission_classes = [IsStaff]
     queryset = Cart.objects.prefetch_related("items").order_by("-updated_at")
     serializer_class = s.CartCrmSerializer
@@ -275,6 +280,7 @@ class InvoiceSeriesViewSet(CrmViewSet):
 
 
 class TaxConfigView(APIView):
+    authentication_classes = CRM_AUTHENTICATION
     permission_classes = [IsStaff]
 
     def get(self, request):
@@ -294,6 +300,7 @@ class TaxConfigView(APIView):
 
 
 class SiteConfigCrmView(APIView):
+    authentication_classes = CRM_AUTHENTICATION
     permission_classes = [IsStaff]
 
     def get(self, request):
@@ -308,6 +315,7 @@ class SiteConfigCrmView(APIView):
 
 
 class HomeHeroCrmView(APIView):
+    authentication_classes = CRM_AUTHENTICATION
     permission_classes = [IsStaff]
 
     def get(self, request):
@@ -326,6 +334,7 @@ class HomeHeroCrmView(APIView):
 # ---------------------------------------------------------------------------
 
 class StatsView(APIView):
+    authentication_classes = CRM_AUTHENTICATION
     permission_classes = [IsStaff]
 
     def get(self, request):

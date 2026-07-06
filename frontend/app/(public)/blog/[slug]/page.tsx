@@ -70,7 +70,7 @@ export default async function PostPage({
         </Link>
         <span>/</span>
         <Link href="/blog" className="avelink text-stone">
-          Blog
+          Jurnal
         </Link>
         <span>/</span>
         <span className="truncate text-body">{post.title}</span>

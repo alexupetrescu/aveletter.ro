@@ -1,4 +1,5 @@
 import type { SiteConfigData } from "@/lib/api";
+import { resolveContact } from "@/lib/contact";
 import { formatDeliverySummary } from "@/lib/shipping";
 
 export default function DeliveryNotice({
@@ -11,7 +12,7 @@ export default function DeliveryNotice({
   if (!config) return null;
 
   const summary = formatDeliverySummary(config);
-  const email = config.contact_email;
+  const email = resolveContact(config).email;
 
   return (
     <div

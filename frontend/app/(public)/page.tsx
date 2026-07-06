@@ -1,6 +1,8 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { Metadata } from "next";
 import { getCategories, getProducts, getSiteConfig } from "@/lib/api";
+import { resolveContact } from "@/lib/contact";
 import PhotoBox from "@/components/PhotoBox";
 import FilledLink from "@/components/FilledLink";
 import ProductCard from "@/components/ProductCard";
@@ -45,6 +47,7 @@ async function loadData() {
 export default async function LandingPage() {
   const { categories, products, siteConfig } = await loadData();
   const hero = siteConfig?.hero;
+  const contact = resolveContact(siteConfig);
 
   return (
     <div>
@@ -107,7 +110,14 @@ export default async function LandingPage() {
         id="despre"
         className="mx-auto grid max-w-[1440px] grid-cols-1 items-center gap-12 px-6 py-20 lg:grid-cols-[0.85fr_1fr] lg:gap-20 lg:px-12 lg:py-[130px]"
       >
-        <PhotoBox label="foto: Adina în atelier" aspect="4/5" />
+        <Image
+          src="/images/aveletter_adinapetrescu-922x1024.jpg"
+          alt="Adina Petrescu în atelierul Ave Letter Studio"
+          width={922}
+          height={1024}
+          className="aspect-[4/5] w-full object-cover"
+          priority
+        />
         <div>
           <div className="mb-2.5 font-script text-[26px] text-olive">
             bună, eu sunt Adina
@@ -244,11 +254,23 @@ export default async function LandingPage() {
       <div className="border-t border-ink/8 bg-paper py-20 lg:py-[100px]">
         <div className="mx-auto flex max-w-[1440px] items-baseline justify-between px-6 pb-12 lg:px-12">
           <h2 className="font-serif text-[26px] font-medium lg:text-[32px]">
-            Din atelier, pe Instagram
+            <a
+              href={contact.instagram}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="avelink"
+            >
+              Din atelier, pe Instagram
+            </a>
           </h2>
-          <span className="text-xs tracking-[2px] text-muted">
-            @ave.letter.studio
-          </span>
+          <a
+            href={contact.instagram}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="avelink text-xs tracking-[2px] text-muted"
+          >
+            {contact.instagramHandle}
+          </a>
         </div>
         <div className="grid grid-cols-2 gap-0.5 sm:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (

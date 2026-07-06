@@ -60,14 +60,14 @@ export default function Nav() {
         </Link>
 
         <div className="flex flex-1 items-center justify-end gap-5 lg:gap-9">
-          <NavLink href="/#contact" className="hidden md:inline">
+          <NavLink href="/contact" active={pathname.startsWith("/contact")} className="hidden md:inline">
             CONTACT
           </NavLink>
           <NavLink href="/#despre" className="hidden whitespace-nowrap lg:inline">
             DESPRE MINE
           </NavLink>
           <NavLink href="/blog" active={pathname.startsWith("/blog")}>
-            BLOG
+            JURNAL
           </NavLink>
           <div className="ml-3 flex items-center gap-[18px]">
             <svg

@@ -4,7 +4,7 @@ import BlogIndex from "./BlogIndex";
 export const revalidate = 60;
 
 export const metadata = {
-  title: "Blog — Ave Letter Studio",
+  title: "Jurnal — Ave Letter Studio",
   description:
     "Povești din atelier, inspirație pentru cadouri și gânduri despre arta scrisului de mână.",
 };
@@ -25,7 +25,7 @@ export default async function BlogPage() {
           jurnal de atelier
         </div>
         <h1 className="mb-[18px] font-serif text-[40px] font-medium lg:text-[52px]">
-          Blog
+          Jurnal
         </h1>
         <p className="mx-auto max-w-[520px] text-[14.5px] leading-[1.8] text-muted">
           Povești din atelier, inspirație pentru cadouri și câteva gânduri

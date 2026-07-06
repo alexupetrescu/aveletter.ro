@@ -1,6 +1,8 @@
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from .models import (
     Product,
@@ -167,3 +169,31 @@ class TextByPageTests(TestCase):
         pricing.text_field_key = "nonexistent"
         with self.assertRaises(ValidationError):
             pricing.full_clean()
+
+
+class ProductQuoteApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.product = make_product(slug="quote-api-product")
+        User = get_user_model()
+        self.staff = User.objects.create_user("staff", password="pw", is_staff=True)
+
+    def test_quote_works_without_csrf_for_anonymous(self):
+        response = self.client.post(
+            f"/api/shop/products/{self.product.slug}/quote/",
+            {"inputs": {}},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["unit_price_amount"], 5000)
+
+    def test_quote_works_when_staff_session_has_no_csrf(self):
+        """Staff browsing the shop while logged into CRM must not break pricing."""
+        self.client.login(username="staff", password="pw")
+        response = self.client.post(
+            f"/api/shop/products/{self.product.slug}/quote/",
+            {"inputs": {}},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["unit_price_amount"], 5000)

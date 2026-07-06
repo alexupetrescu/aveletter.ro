@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .permissions import IsStaff
+from .permissions import CRM_AUTHENTICATION, IsStaff
 
 
 def _user_payload(user):
@@ -26,6 +26,7 @@ class CsrfView(APIView):
 
 
 class LoginView(APIView):
+    authentication_classes = CRM_AUTHENTICATION
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -43,6 +44,7 @@ class LoginView(APIView):
 
 
 class LogoutView(APIView):
+    authentication_classes = CRM_AUTHENTICATION
     permission_classes = [IsStaff]
 
     def post(self, request):
@@ -51,6 +53,7 @@ class LogoutView(APIView):
 
 
 class MeView(APIView):
+    authentication_classes = CRM_AUTHENTICATION
     permission_classes = [AllowAny]
 
     def get(self, request):

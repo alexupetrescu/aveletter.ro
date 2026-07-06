@@ -1,4 +1,7 @@
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import BasePermission
+
+CRM_AUTHENTICATION = [SessionAuthentication]
 
 
 class IsStaff(BasePermission):
