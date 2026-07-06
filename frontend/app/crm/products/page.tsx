@@ -197,17 +197,24 @@ export default function CrmProductsPage() {
               ),
           },
           {
-            key: "state",
-            header: "Stare",
+            key: "stock_status",
+            header: "Stare stoc",
             render: (p) =>
               p.product_type === "premade" ? (
                 <StockStatusSelect product={p} onUpdated={() => refetch()} />
               ) : (
-                <StatusBadge
-                  value={p.status === "published" ? p.publish_state : p.status}
-                  label={p.publish_state}
-                />
+                "—"
               ),
+          },
+          {
+            key: "state",
+            header: "Stare",
+            render: (p) => (
+              <StatusBadge
+                value={p.status === "published" ? p.publish_state : p.status}
+                label={p.publish_state}
+              />
+            ),
           },
           {
             key: "price",
