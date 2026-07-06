@@ -262,8 +262,8 @@ class TextByPagePricing(models.Model):
         null=True,
         blank=True,
         help_text=(
-            "Cuvinte pe pagină în medie — folosit doar pentru estimarea paginilor "
-            "afișată clientului (mod „Pe X cuvinte”)."
+            "Cuvinte pe pagină în medie — la mod „Pe X cuvinte”: prag inclus în "
+            "prețul de bază; folosit și pentru estimarea paginilor afișată clientului."
         ),
     )
     price_per_unit_amount = models.PositiveIntegerField(

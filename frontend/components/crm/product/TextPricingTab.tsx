@@ -153,7 +153,7 @@ export default function TextPricingTab({
                 </Field>
                 <Field
                   label="Cuvinte pe pagină în medie"
-                  hint="Folosit doar pentru estimarea paginilor afișată clientului. Ex.: 281 cuvinte la 140/pagină ≈ 2 pagini."
+                  hint="Prag inclus în prețul de bază; cuvintele peste acest număr se tarifează pe blocuri. Ex.: 281 cuvinte la 140/pagină ≈ 2 pagini estimate."
                 >
                   <TextInput
                     type="number"
@@ -201,7 +201,7 @@ export default function TextPricingTab({
                 mode === "per_page"
                   ? "Prima pagină este inclusă în prețul de bază al produsului."
                   : mode === "per_word_block"
-                    ? "Primul bloc este acoperit de taxa de pornire (sau prețul de bază dacă taxa e 0)."
+                    ? "Cuvintele până la pragul „Cuvinte pe pagină în medie” sunt incluse în taxa de pornire (sau prețul de bază dacă taxa e 0)."
                     : undefined
               }
             >

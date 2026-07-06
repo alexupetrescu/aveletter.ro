@@ -171,16 +171,25 @@ def _compute_text_pricing(pricing, text: str, *, base_amount: int) -> tuple[int,
 
     if mode == TextByPagePricing.PricingMode.PER_WORD_BLOCK:
         block_size = pricing.words_per_page
+        included_threshold = pricing.average_words_per_page or block_size
+        if block_size and word_count > included_threshold:
+            chargeable_words = word_count - included_threshold
+            raw_extra = chargeable_words / block_size
+            extra_blocks = (
+                math.ceil(raw_extra) if pricing.round_up else int(raw_extra)
+            )
+        else:
+            extra_blocks = 0
         raw_blocks = word_count / block_size if block_size else 0
         blocks = math.ceil(raw_blocks) if pricing.round_up else int(raw_blocks)
         blocks = max(blocks, 1) if word_count > 0 else 0
-        extra_blocks = max(0, blocks - 1)
         text_amount = setup + extra_blocks * pricing.price_per_unit_amount
         item = {
             "type": "text_pricing",
             "pricing_mode": mode,
             "word_count": word_count,
             "words_per_block": block_size,
+            "included_words_threshold": included_threshold,
             "blocks": blocks,
             "extra_blocks": extra_blocks,
             "price_per_unit_amount": pricing.price_per_unit_amount,

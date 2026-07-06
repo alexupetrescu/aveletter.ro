@@ -20,6 +20,96 @@ const QUOTE_DEBOUNCE_MS = 400;
 
 const TEXT_FIELD_TYPES = new Set(["short_text", "long_text"]);
 
+function countWords(text: string): number {
+  if (!text.trim()) return 0;
+  const matches = text.match(/\b[\wăâîșțĂÂÎȘȚ'-]+\b/gu);
+  return matches?.length ?? 0;
+}
+
+function missingFieldMessage(
+  field: ProductInputField,
+  product: ProductDetail,
+): string {
+  if (
+    field.field_type === "long_text" ||
+    (product.text_pricing?.text_field_key === field.key &&
+      product.product_type === "text_by_page")
+  ) {
+    return "Ai omis să ne spui ce text dorești!";
+  }
+  if (field.field_type === "file") {
+    return `Ai omis să încarci „${field.label}".`;
+  }
+  return `„${field.label}" este obligatoriu.`;
+}
+
+function collectAddToCartErrors(
+  product: ProductDetail,
+  inputs: Record<string, unknown>,
+  files: Record<string, File>,
+  selectedOptions: number[],
+  variantId: number | null,
+): string[] {
+  const errors: string[] = [];
+
+  if (product.variants.length > 0 && variantId === null) {
+    errors.push("Alege o variantă.");
+  }
+
+  for (const group of product.option_groups) {
+    const count = selectedOptions.filter((id) =>
+      group.options.some((o) => o.id === id),
+    ).length;
+    const min = group.min_selections || (group.required ? 1 : 0);
+    if (count < min) {
+      errors.push(`Alege o opțiune pentru „${group.name}".`);
+    } else if (group.max_selections && count > group.max_selections) {
+      errors.push(
+        `Selectează cel mult ${group.max_selections} în „${group.name}".`,
+      );
+    }
+  }
+
+  for (const field of product.input_fields) {
+    if (field.field_type === "file") {
+      if (isMandatoryField(field, product) && !files[field.key]) {
+        errors.push(missingFieldMessage(field, product));
+      }
+      continue;
+    }
+
+    const text = String(inputs[field.key] ?? "");
+    if (isMandatoryField(field, product) && !text.trim()) {
+      errors.push(missingFieldMessage(field, product));
+      continue;
+    }
+    if (!text.trim()) continue;
+
+    if (field.min_chars !== null && text.length < field.min_chars) {
+      errors.push(
+        `„${field.label}" trebuie să aibă cel puțin ${field.min_chars} caractere.`,
+      );
+    } else if (field.max_chars !== null && text.length > field.max_chars) {
+      errors.push(
+        `„${field.label}" trebuie să aibă cel mult ${field.max_chars} caractere.`,
+      );
+    }
+
+    const words = countWords(text);
+    if (field.min_words !== null && words < field.min_words) {
+      errors.push(
+        `„${field.label}" trebuie să aibă cel puțin ${field.min_words} cuvinte.`,
+      );
+    } else if (field.max_words !== null && words > field.max_words) {
+      errors.push(
+        `„${field.label}" trebuie să aibă cel mult ${field.max_words} cuvinte.`,
+      );
+    }
+  }
+
+  return errors;
+}
+
 function isMandatoryField(field: ProductInputField, product: ProductDetail): boolean {
   if (field.required) return true;
   if (
@@ -35,23 +125,6 @@ function isMandatoryField(field: ProductInputField, product: ProductDetail): boo
     return true;
   }
   return false;
-}
-
-function inputsAreComplete(
-  product: ProductDetail,
-  inputs: Record<string, unknown>,
-  files: Record<string, File>,
-): boolean {
-  for (const field of product.input_fields) {
-    if (field.field_type === "file") {
-      if (isMandatoryField(field, product) && !files[field.key]) return false;
-      continue;
-    }
-    if (!isMandatoryField(field, product)) continue;
-    const value = inputs[field.key];
-    if (!String(value ?? "").trim()) return false;
-  }
-  return true;
 }
 
 function InputFieldControl({
@@ -192,6 +265,7 @@ export default function ProductConfigurator({
   const [added, setAdded] = useState(false);
   const [showAddedBanner, setShowAddedBanner] = useState(false);
   const [addErrors, setAddErrors] = useState<string[]>([]);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const quoteSeq = useRef(0);
   const addedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -211,10 +285,32 @@ export default function ProductConfigurator({
     return data;
   }, [inputs, product.input_fields]);
 
-  const inputsValid = useMemo(
-    () => inputsAreComplete(product, inputs, files),
-    [product, inputs, files],
+  const validationErrors = useMemo(
+    () =>
+      collectAddToCartErrors(
+        product,
+        inputs,
+        files,
+        selectedOptions,
+        variantId,
+      ),
+    [product, inputs, files, selectedOptions, variantId],
   );
+
+  const blockingErrors = useMemo(
+    () => [...validationErrors, ...quoteErrors],
+    [validationErrors, quoteErrors],
+  );
+
+  const visibleErrors = addErrors.length > 0
+    ? addErrors
+    : submitAttempted
+      ? blockingErrors
+      : quoteErrors;
+
+  useEffect(() => {
+    setAddErrors([]);
+  }, [inputs, files, selectedOptions, variantId]);
 
   // Server-authoritative price preview: debounce, then ask Django.
   // The client never computes pages or totals itself.
@@ -270,6 +366,28 @@ export default function ProductConfigurator({
 
   const handleAddToCart = useCallback(async () => {
     if (!cartKey) return;
+    setSubmitAttempted(true);
+
+    const clientErrors = collectAddToCartErrors(
+      product,
+      inputs,
+      files,
+      selectedOptions,
+      variantId,
+    );
+    if (clientErrors.length) {
+      setAddErrors(clientErrors);
+      return;
+    }
+    if (quoteErrors.length) {
+      setAddErrors(quoteErrors);
+      return;
+    }
+    if (!quote) {
+      setAddErrors(["Prețul nu a putut fi calculat."]);
+      return;
+    }
+
     setAdding(true);
     setAddErrors([]);
     setAdded(false);
@@ -313,12 +431,15 @@ export default function ProductConfigurator({
     }
   }, [
     cartKey,
-    product.slug,
-    variantId,
+    product,
+    inputs,
+    files,
     selectedOptions,
+    variantId,
+    quoteErrors,
+    quote,
     nonFileInputs,
     quantity,
-    files,
     refresh,
     router,
   ]);
@@ -425,7 +546,7 @@ export default function ProductConfigurator({
             )}
           </div>
         )}
-        {quoteErrors.length > 0 && (
+        {quoteErrors.length > 0 && !submitAttempted && (
           <div className="mb-6 -mt-3 text-[13px] text-[#a03030]">
             {quoteErrors.join(" ")}
           </div>
@@ -508,10 +629,19 @@ export default function ProductConfigurator({
                       onClick={() =>
                         toggleOption(group.id, option.id, group.max_selections)
                       }
-                      className={`cursor-pointer border px-4 py-2.5 text-[12.5px] ${
+                      className={`flex cursor-pointer items-center gap-2 border px-4 py-2.5 text-[12.5px] ${
                         selected ? "border-ink bg-ink text-paper" : "border-ink/20"
                       }`}
                     >
+                      {option.color_hex && (
+                        <span
+                          className={`size-3.5 shrink-0 rounded-full border ${
+                            selected ? "border-paper/40" : "border-ink/20"
+                          }`}
+                          style={{ backgroundColor: option.color_hex }}
+                          aria-hidden
+                        />
+                      )}
                       {option.label}
                       {option.price_delta_amount !== 0 && (
                         <span className="ml-1.5 text-[11px] opacity-70">
@@ -573,6 +703,16 @@ export default function ProductConfigurator({
             </div>
           </div>
         )}
+        {visibleErrors.length > 0 && (
+          <div
+            className="mb-4 border border-[#a03030]/25 bg-[#a03030]/5 px-4 py-3 text-[13px] leading-relaxed text-[#a03030]"
+            role="alert"
+          >
+            {visibleErrors.map((err, i) => (
+              <p key={i}>{err}</p>
+            ))}
+          </div>
+        )}
         <div className="mb-5 flex gap-4">
           <div className="flex items-center border border-ink/18">
             <button
@@ -593,7 +733,7 @@ export default function ProductConfigurator({
           </div>
           <button
             onClick={handleAddToCart}
-            disabled={adding || added || !quote || !inputsValid || quoteErrors.length > 0}
+            disabled={adding || added}
             className={`flex-1 cursor-pointer text-xs tracking-[2px] disabled:opacity-50 ${
               added
                 ? "bg-olive text-paper"
@@ -607,11 +747,6 @@ export default function ProductConfigurator({
                 : "ADAUGĂ ÎN COȘ"}
           </button>
         </div>
-        {addErrors.length > 0 && (
-          <div className="mb-4 text-[13px] text-[#a03030]">
-            {addErrors.join(" ")}
-          </div>
-        )}
 
         <DeliveryNotice config={siteConfig} className="mb-6" />
 

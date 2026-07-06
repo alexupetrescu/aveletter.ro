@@ -248,6 +248,16 @@ class TextPerWordBlockTests(TestCase):
         self.assertEqual(quote.breakdown["blocks"], 1)
         self.assertEqual(quote.breakdown["extra_blocks"], 0)
 
+    def test_words_up_to_average_threshold_use_base_only(self):
+        quote = self.quote_words(140)
+        self.assertEqual(quote.unit_price_amount, 3500)
+        self.assertEqual(quote.breakdown["extra_blocks"], 0)
+
+    def test_extra_blocks_start_after_average_threshold(self):
+        quote = self.quote_words(141)
+        self.assertEqual(quote.breakdown["extra_blocks"], 1)
+        self.assertEqual(quote.unit_price_amount, 3500 + 3500)
+
     def test_extra_blocks_charged(self):
         quote = self.quote_words(250)
         self.assertEqual(quote.breakdown["blocks"], 3)

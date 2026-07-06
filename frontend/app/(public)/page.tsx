@@ -9,6 +9,8 @@ import ProductCard from "@/components/ProductCard";
 
 export const revalidate = 60;
 
+const CALIGRAPHY_YEARS = new Date().getFullYear() - 2017;
+
 export const metadata: Metadata = {
   title: "Ave Letter Studio — Cadouri personalizate prin caligrafie",
 };
@@ -126,7 +128,8 @@ export default async function LandingPage() {
             Un atelier de suflet, o poveste scrisă de mână
           </h2>
           <p className="mb-5 text-[15.5px] leading-[1.9] text-soft">
-            Practic caligrafia de aproximativ 5 ani — timp în care am
+            Practic caligrafia de aproximativ {CALIGRAPHY_YEARS} ani — timp în
+            care am
             descoperit un stil propriu și o ocupație care îmi umple sufletul
             de bucurie și răgaz.
           </p>
