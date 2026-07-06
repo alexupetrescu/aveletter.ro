@@ -37,6 +37,18 @@ export default function ProductCard({
       <h3 className="mb-2 font-serif text-[18.5px] font-medium text-ink">
         {product.title}
       </h3>
+      {product.product_type === "premade" && product.availability && (
+        <p className="mb-1.5 text-[12px] text-olive">
+          {product.availability.label}
+          {product.availability.show_quantity && (
+            <span className="text-body">
+              {" "}
+              · {product.availability.quantity}{" "}
+              {product.availability.quantity === 1 ? "buc." : "buc."}
+            </span>
+          )}
+        </p>
+      )}
       <span className="text-[13.5px] text-body">{priceLabel}</span>
     </Link>
   );

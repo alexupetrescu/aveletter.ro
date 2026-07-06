@@ -96,16 +96,21 @@ class ProductInputFieldSerializer(serializers.ModelSerializer):
 class ProductListSerializer(serializers.ModelSerializer):
     category = ProductCategoryBriefSerializer(read_only=True)
     featured_image = serializers.SerializerMethodField()
+    availability = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = [
             "title", "slug", "product_type", "sku", "category", "short_description",
             "featured_image", "base_price_amount", "currency", "is_featured",
+            "availability",
         ]
 
     def get_featured_image(self, obj):
         return asset_data(obj.featured_image, self.context.get("request"))
+
+    def get_availability(self, obj):
+        return obj.public_availability
 
 
 class ProductDetailSerializer(ProductListSerializer):

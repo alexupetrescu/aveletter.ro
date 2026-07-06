@@ -116,6 +116,8 @@ export default function CrmProductEditorPage({
       production_time_max_days: draft.production_time_max_days ?? 10,
       seo_title: draft.seo_title ?? "",
       seo_description: draft.seo_description ?? "",
+      stock_quantity: draft.stock_quantity ?? 0,
+      stock_status: draft.stock_status ?? "on_order",
     };
     if (!body.title || !body.slug) {
       toast("Titlul și slug-ul sunt obligatorii.", "error");
@@ -263,6 +265,37 @@ export default function CrmProductEditorPage({
                     onChange={(e) => patch({ sku: e.target.value || null })}
                   />
                 </Field>
+                {draft.product_type === "premade" && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field label="Cantitate în stoc" hint="Bucăți disponibile în atelier.">
+                      <TextInput
+                        type="number"
+                        min={0}
+                        value={draft.stock_quantity ?? 0}
+                        onChange={(e) =>
+                          patch({ stock_quantity: Math.max(0, Number(e.target.value) || 0) })
+                        }
+                      />
+                    </Field>
+                    <Field
+                      label="Stare stoc"
+                      hint="La 0 bucăți, clienții văd automat „La comandă”."
+                    >
+                      <Select
+                        value={draft.stock_status ?? "on_order"}
+                        onChange={(e) =>
+                          patch({
+                            stock_status: e.target.value as CrmProductDetail["stock_status"],
+                          })
+                        }
+                      >
+                        <option value="in_stock">În stoc</option>
+                        <option value="limited">Stoc limitat (afișează numărul)</option>
+                        <option value="on_order">La comandă</option>
+                      </Select>
+                    </Field>
+                  </div>
+                )}
                 <Field label="Descriere scurtă">
                   <TextArea
                     rows={2}

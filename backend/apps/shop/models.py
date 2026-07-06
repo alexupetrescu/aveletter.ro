@@ -75,6 +75,22 @@ class Product(Publishable):
     production_time_min_days = models.PositiveIntegerField(default=3)
     production_time_max_days = models.PositiveIntegerField(default=10)
 
+    class StockStatus(models.TextChoices):
+        IN_STOCK = "in_stock", "În stoc"
+        LIMITED = "limited", "Stoc limitat"
+        ON_ORDER = "on_order", "La comandă"
+
+    stock_quantity = models.PositiveIntegerField(
+        default=0,
+        help_text="For premade products: units available in atelier.",
+    )
+    stock_status = models.CharField(
+        max_length=20,
+        choices=StockStatus.choices,
+        default=StockStatus.ON_ORDER,
+        help_text="How availability is shown to clients (premade products).",
+    )
+
     objects = PublishedQuerySet.as_manager()
 
     class Meta:
@@ -91,6 +107,39 @@ class Product(Publishable):
         if self.sku == "":
             self.sku = None
         super().save(*args, **kwargs)
+
+    @property
+    def public_availability(self):
+        """Client-facing stock label for premade products."""
+        if self.product_type != self.ProductType.PREMADE:
+            return None
+        if self.stock_quantity == 0:
+            return {
+                "status": self.StockStatus.ON_ORDER,
+                "label": "La comandă",
+                "show_quantity": False,
+                "quantity": 0,
+            }
+        if self.stock_status == self.StockStatus.IN_STOCK:
+            return {
+                "status": self.StockStatus.IN_STOCK,
+                "label": "În stoc",
+                "show_quantity": False,
+                "quantity": self.stock_quantity,
+            }
+        if self.stock_status == self.StockStatus.LIMITED:
+            return {
+                "status": self.StockStatus.LIMITED,
+                "label": "Stoc limitat",
+                "show_quantity": True,
+                "quantity": self.stock_quantity,
+            }
+        return {
+            "status": self.StockStatus.ON_ORDER,
+            "label": "La comandă",
+            "show_quantity": False,
+            "quantity": self.stock_quantity,
+        }
 
 
 class ProductImage(models.Model):

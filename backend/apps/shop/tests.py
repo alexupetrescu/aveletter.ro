@@ -412,3 +412,53 @@ class RecommendationTests(TestCase):
         slugs = [p["slug"] for p in response.data["cross_sells"]]
         self.assertEqual(slugs[0], "complement-product")
         self.assertIn("upsells", response.data)
+
+
+class PremadeStockTests(TestCase):
+    def test_public_availability_zero_stock(self):
+        product = make_product(
+            slug="premade-zero",
+            product_type=Product.ProductType.PREMADE,
+            stock_quantity=0,
+            stock_status=Product.StockStatus.IN_STOCK,
+        )
+        avail = product.public_availability
+        self.assertEqual(avail["label"], "La comandă")
+        self.assertFalse(avail["show_quantity"])
+
+    def test_public_availability_in_stock_hides_quantity(self):
+        product = make_product(
+            slug="premade-stock",
+            product_type=Product.ProductType.PREMADE,
+            stock_quantity=5,
+            stock_status=Product.StockStatus.IN_STOCK,
+        )
+        avail = product.public_availability
+        self.assertEqual(avail["label"], "În stoc")
+        self.assertFalse(avail["show_quantity"])
+
+    def test_public_availability_limited_shows_quantity(self):
+        product = make_product(
+            slug="premade-limited",
+            product_type=Product.ProductType.PREMADE,
+            stock_quantity=3,
+            stock_status=Product.StockStatus.LIMITED,
+        )
+        avail = product.public_availability
+        self.assertEqual(avail["label"], "Stoc limitat")
+        self.assertTrue(avail["show_quantity"])
+        self.assertEqual(avail["quantity"], 3)
+
+    def test_product_detail_includes_availability(self):
+        product = make_product(
+            slug="premade-api",
+            product_type=Product.ProductType.PREMADE,
+            stock_quantity=2,
+            stock_status=Product.StockStatus.LIMITED,
+        )
+        client = APIClient()
+        response = client.get(f"/api/shop/products/{product.slug}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["availability"]["label"], "Stoc limitat")
+        self.assertTrue(response.data["availability"]["show_quantity"])
+        self.assertEqual(response.data["availability"]["quantity"], 2)

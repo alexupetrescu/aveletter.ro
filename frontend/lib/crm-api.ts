@@ -189,6 +189,8 @@ export interface CrmProductList {
   featured_image_data: AssetSummary | null;
   published_at: string | null;
   updated_at: string;
+  stock_quantity: number;
+  stock_status: "in_stock" | "limited" | "on_order";
 }
 
 export interface CrmProductDetail extends CrmProductList {

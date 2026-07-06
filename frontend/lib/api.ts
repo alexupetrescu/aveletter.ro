@@ -22,6 +22,13 @@ export interface ProductCategoryRef {
   slug: string;
 }
 
+export interface ProductAvailability {
+  status: "in_stock" | "limited" | "on_order";
+  label: string;
+  show_quantity: boolean;
+  quantity: number;
+}
+
 export interface ProductListItem {
   title: string;
   slug: string;
@@ -32,6 +39,7 @@ export interface ProductListItem {
   base_price_amount: number;
   currency: string;
   is_featured: boolean;
+  availability: ProductAvailability | null;
 }
 
 export interface ProductVariant {

@@ -527,6 +527,18 @@ export default function ProductConfigurator({
             <span className="ml-3 text-[12px] text-stone">se calculează…</span>
           )}
         </div>
+        {product.product_type === "premade" && product.availability && (
+          <div className="mb-6 -mt-4 text-[13px] text-olive">
+            {product.availability.label}
+            {product.availability.show_quantity && (
+              <span className="text-muted">
+                {" "}
+                · {product.availability.quantity}{" "}
+                {product.availability.quantity === 1 ? "bucată" : "bucăți"}
+              </span>
+            )}
+          </div>
+        )}
         {showTextStats && (
           <div className="mb-6 -mt-4 text-[13px] text-muted">
             {pricingMode === "per_character" && charCount !== undefined && charCount > 0 ? (

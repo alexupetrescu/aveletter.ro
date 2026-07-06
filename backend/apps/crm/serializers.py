@@ -269,6 +269,7 @@ class ProductCrmListSerializer(serializers.ModelSerializer):
             "id", "title", "slug", "product_type", "status", "publish_state",
             "category", "category_name", "sku", "base_price_amount", "currency",
             "is_featured", "featured_image_data", "published_at", "updated_at",
+            "stock_quantity", "stock_status",
         ]
 
     def get_featured_image_data(self, obj):

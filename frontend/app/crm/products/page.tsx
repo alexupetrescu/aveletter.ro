@@ -4,11 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { CrmProductList, Paginated } from "@/lib/crm-api";
-import { useCrmList } from "@/lib/crm-hooks";
+import { useCrmList, useCrmUpdate } from "@/lib/crm-hooks";
 import { formatBani } from "@/lib/money";
-import { Button, PageHeader, StatusBadge } from "@/components/crm/ui";
+import { Button, PageHeader, Select, StatusBadge, useToast } from "@/components/crm/ui";
 import { DataTable, FilterChips, SearchInput } from "@/components/crm/DataTable";
 import { MediaThumb } from "@/components/crm/MediaPicker";
+import {
+  STOCK_STATUS_OPTIONS,
+  StockStatus,
+} from "@/components/crm/stockStatus";
 
 export const PRODUCT_TYPE_LABELS: Record<string, string> = {
   standard: "Standard",
@@ -18,13 +22,92 @@ export const PRODUCT_TYPE_LABELS: Record<string, string> = {
   premade: "Pregătit (cu stoc)",
 };
 
+function StockStatusSelect({
+  product,
+  onUpdated,
+}: {
+  product: CrmProductList;
+  onUpdated: () => void;
+}) {
+  const update = useCrmUpdate<CrmProductList>("products");
+  const toast = useToast();
+
+  return (
+    <Select
+      value={product.stock_quantity === 0 ? "on_order" : product.stock_status}
+      disabled={update.isPending}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        const stock_status = e.target.value as StockStatus;
+        update.mutate(
+          { id: product.id, body: { stock_status } },
+          {
+            onSuccess: onUpdated,
+            onError: (err) => toast(err.message, "error"),
+          },
+        );
+      }}
+      className="text-[12px] py-1 min-w-[8.5rem]"
+    >
+      {STOCK_STATUS_OPTIONS.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
+function StockQuantityInput({
+  product,
+  onUpdated,
+}: {
+  product: CrmProductList;
+  onUpdated: () => void;
+}) {
+  const update = useCrmUpdate<CrmProductList>("products");
+  const toast = useToast();
+  const [value, setValue] = useState(String(product.stock_quantity));
+
+  function commit() {
+    const stock_quantity = Math.max(0, Number(value) || 0);
+    if (stock_quantity === product.stock_quantity) return;
+    update.mutate(
+      { id: product.id, body: { stock_quantity } },
+      {
+        onSuccess: onUpdated,
+        onError: (err) => toast(err.message, "error"),
+      },
+    );
+  }
+
+  return (
+    <input
+      type="number"
+      min={0}
+      value={value}
+      disabled={update.isPending}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+      className="w-16 border border-ink/15 bg-paper px-2 py-1 text-[13px] text-right rounded-sm"
+    />
+  );
+}
+
 export default function CrmProductsPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
 
-  const { data, isLoading } = useCrmList<Paginated<CrmProductList>>("products", {
+  const { data, isLoading, refetch } = useCrmList<Paginated<CrmProductList>>("products", {
     search: search || undefined,
     status: status || undefined,
     page,
@@ -99,9 +182,32 @@ export default function CrmProductsPage() {
             render: (p) => p.category_name ?? "—",
           },
           {
+            key: "stock",
+            header: "Stoc",
+            className: "text-right",
+            render: (p) =>
+              p.product_type === "premade" ? (
+                <StockQuantityInput
+                  key={`${p.id}-${p.stock_quantity}`}
+                  product={p}
+                  onUpdated={() => refetch()}
+                />
+              ) : (
+                "—"
+              ),
+          },
+          {
             key: "state",
             header: "Stare",
-            render: (p) => <StatusBadge value={p.status === "published" ? p.publish_state : p.status} label={p.publish_state} />,
+            render: (p) =>
+              p.product_type === "premade" ? (
+                <StockStatusSelect product={p} onUpdated={() => refetch()} />
+              ) : (
+                <StatusBadge
+                  value={p.status === "published" ? p.publish_state : p.status}
+                  label={p.publish_state}
+                />
+              ),
           },
           {
             key: "price",

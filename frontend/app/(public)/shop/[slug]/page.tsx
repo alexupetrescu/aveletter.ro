@@ -107,10 +107,9 @@ export default async function ProductPage({
       {/* PRODUCT MAIN */}
       <ProductConfigurator product={product} siteConfig={siteConfig} />
 
-      {/* UPSELLS & CROSS-SELLS */}
-      <ProductGrid title="Produse superioare" products={product.upsells ?? []} />
+      {/* RECOMMENDATIONS */}
       <ProductGrid
-        title="Produse complementare"
+        title="Completează experiența cu alte produse din atelier"
         products={product.cross_sells ?? []}
       />
     </div>
