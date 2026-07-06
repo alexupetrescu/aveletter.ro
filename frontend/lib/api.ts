@@ -25,7 +25,7 @@ export interface ProductCategoryRef {
 export interface ProductListItem {
   title: string;
   slug: string;
-  product_type: "standard" | "text_by_page" | "ornament" | "custom_quote";
+  product_type: "standard" | "text_by_page" | "ornament" | "custom_quote" | "premade";
   category: ProductCategoryRef | null;
   short_description: string;
   featured_image: AssetData | null;
@@ -96,6 +96,8 @@ export interface ProductDetail extends ProductListItem {
   option_groups: ProductOptionGroup[];
   input_fields: ProductInputField[];
   text_pricing: { text_field_key: string } | null;
+  upsells: ProductListItem[];
+  cross_sells: ProductListItem[];
   requires_manual_approval: boolean;
   production_time_min_days: number;
   production_time_max_days: number;
@@ -115,6 +117,9 @@ export interface QuoteResponse {
     word_count?: number;
     pages?: number;
     extra_pages?: number;
+    blocks?: number;
+    extra_blocks?: number;
+    words_per_block?: number;
     char_count?: number;
   };
   warnings: string[];

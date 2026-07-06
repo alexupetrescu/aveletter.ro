@@ -9,9 +9,25 @@ import DeliveryNotice from "@/components/DeliveryNotice";
 import FilledLink from "@/components/FilledLink";
 import PhotoBox from "@/components/PhotoBox";
 
+function RemoveIcon() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      className="h-3.5 w-3.5 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.25"
+    >
+      <path d="M2 4h12M5.5 4V2.5h5V4M6 7v4.5M10 7v4.5M3.5 4l.75 9h8.5l.75-9" />
+    </svg>
+  );
+}
+
 export default function CartPage() {
   const { cart, loading, updateItem, removeItem } = useCart();
   const [siteConfig, setSiteConfig] = useState<SiteConfigData | null>(null);
+  const [removingId, setRemovingId] = useState<number | null>(null);
 
   useEffect(() => {
     getSiteConfig().then(setSiteConfig).catch(() => null);
@@ -19,6 +35,15 @@ export default function CartPage() {
 
   const items = cart?.items ?? [];
   const subtotal = cart?.subtotal_amount ?? 0;
+
+  async function handleRemove(itemId: number) {
+    setRemovingId(itemId);
+    try {
+      await removeItem(itemId);
+    } finally {
+      setRemovingId(null);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-[1100px] px-6 pt-[84px] pb-32 lg:px-12">
@@ -48,84 +73,102 @@ export default function CartPage() {
             {items.map((item) => (
               <div
                 key={item.id}
-                className="grid grid-cols-[80px_1fr_auto] items-center gap-5 border-b border-ink/10 py-6 sm:grid-cols-[96px_1fr_auto_auto] sm:gap-7"
+                className="border-b border-ink/10 py-8"
               >
-                <Link href={`/shop/${item.product_slug}`} className="avelink">
-                  <PhotoBox
-                    asset={item.product_image}
-                    aspect="1/1"
-                    label="foto"
-                  />
-                </Link>
-                <div>
-                  <Link
-                    href={`/shop/${item.product_slug}`}
-                    className="avelink"
-                  >
-                    <h3 className="mb-1 font-serif text-[19px] font-medium">
-                      {item.product_title}
-                    </h3>
+                <div className="grid grid-cols-[80px_1fr] gap-5 sm:grid-cols-[96px_minmax(0,1fr)_auto] sm:items-start sm:gap-7">
+                  <Link href={`/shop/${item.product_slug}`} className="avelink">
+                    <PhotoBox
+                      asset={item.product_image}
+                      aspect="1/1"
+                      label="foto"
+                    />
                   </Link>
-                  {item.variant_name && item.variant_name !== "Default" && (
-                    <div className="text-[12.5px] text-muted">
-                      {item.variant_name}
-                    </div>
-                  )}
-                  {item.selected_option_labels.map((opt, i) => (
-                    <div key={i} className="text-[12.5px] text-muted">
-                      {opt.group}: {opt.label}
-                    </div>
-                  ))}
-                  {Object.entries(item.inputs)
-                    .filter(([key]) => !key.startsWith("_"))
-                    .map(([key, value]) => (
-                      <div
-                        key={key}
-                        className="max-w-[420px] truncate font-serif text-[13.5px] italic text-soft"
-                      >
-                        {typeof value === "object" && value !== null
-                          ? `fișier: ${(value as { filename?: string }).filename ?? ""}`
-                          : `„${String(value)}”`}
+                  <div className="min-w-0">
+                    <Link
+                      href={`/shop/${item.product_slug}`}
+                      className="avelink"
+                    >
+                      <h3 className="mb-1 font-serif text-[19px] font-medium">
+                        {item.product_title}
+                      </h3>
+                    </Link>
+                    {item.variant_name && item.variant_name !== "Default" && (
+                      <div className="text-[12.5px] text-muted">
+                        {item.variant_name}
+                      </div>
+                    )}
+                    {item.selected_option_labels.map((opt, i) => (
+                      <div key={i} className="text-[12.5px] text-muted">
+                        {opt.group}: {opt.label}
                       </div>
                     ))}
-                  {typeof item.price_breakdown.pages === "number" && (
-                    <div className="text-[12px] text-stone">
-                      {String(item.price_breakdown.word_count)} cuvinte ·{" "}
-                      {String(item.price_breakdown.pages)} pagini
-                    </div>
-                  )}
-                  <button
-                    onClick={() => removeItem(item.id)}
-                    className="mt-2 cursor-pointer text-[11px] tracking-[1.5px] text-stone underline-offset-2 hover:underline"
-                  >
-                    ELIMINĂ
-                  </button>
-                </div>
-                <div className="flex items-center border border-ink/18">
-                  <button
-                    onClick={() =>
-                      updateItem(item.id, {
-                        quantity: Math.max(1, item.quantity - 1),
-                      })
-                    }
-                    className="h-10 w-9 cursor-pointer text-sm"
-                  >
-                    –
-                  </button>
-                  <div className="w-8 text-center text-[13px]">
-                    {item.quantity}
+                    {Object.entries(item.inputs)
+                      .filter(([key]) => !key.startsWith("_"))
+                      .map(([key, value]) => (
+                        <div
+                          key={key}
+                          className="max-w-[420px] truncate font-serif text-[13.5px] italic text-soft"
+                        >
+                          {typeof value === "object" && value !== null
+                            ? `fișier: ${(value as { filename?: string }).filename ?? ""}`
+                            : `„${String(value)}”`}
+                        </div>
+                      ))}
+                    {typeof item.price_breakdown.pages === "number" && (
+                      <div className="text-[12px] text-stone">
+                        {String(item.price_breakdown.word_count)} cuvinte ·{" "}
+                        {String(item.price_breakdown.pages)} pagini
+                      </div>
+                    )}
                   </div>
-                  <button
-                    onClick={() =>
-                      updateItem(item.id, { quantity: item.quantity + 1 })
-                    }
-                    className="h-10 w-9 cursor-pointer text-sm"
-                  >
-                    +
-                  </button>
+                  <div className="hidden text-right text-[15px] sm:block sm:min-w-[110px]">
+                    {formatBani(item.line_total_amount, item.currency)}
+                  </div>
                 </div>
-                <div className="col-span-3 text-right text-[15px] sm:col-span-1 sm:min-w-[110px]">
-                  {formatBani(item.line_total_amount, item.currency)}
+
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-4 sm:mt-6 sm:justify-end sm:gap-5">
+                  <div className="text-[15px] sm:hidden">
+                    {formatBani(item.line_total_amount, item.currency)}
+                  </div>
+                  <div className="ml-auto flex flex-wrap items-center gap-4 sm:ml-0">
+                    <div className="flex items-center border border-ink/18">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateItem(item.id, {
+                            quantity: Math.max(1, item.quantity - 1),
+                          })
+                        }
+                        className="h-11 w-10 cursor-pointer text-sm"
+                        aria-label="Scade cantitatea"
+                      >
+                        –
+                      </button>
+                      <div className="w-9 text-center text-[13px]">
+                        {item.quantity}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateItem(item.id, { quantity: item.quantity + 1 })
+                        }
+                        className="h-11 w-10 cursor-pointer text-sm"
+                        aria-label="Crește cantitatea"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemove(item.id)}
+                      disabled={removingId === item.id}
+                      aria-label={`Elimină ${item.product_title} din coș`}
+                      className="inline-flex min-h-11 cursor-pointer items-center gap-2.5 border border-ink/25 px-5 py-2.5 text-[11px] tracking-[1.8px] text-body transition-colors hover:border-ink hover:bg-ink/[0.03] disabled:cursor-wait disabled:opacity-50"
+                    >
+                      <RemoveIcon />
+                      {removingId === item.id ? "SE ELIMINĂ…" : "ELIMINĂ DIN COȘ"}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

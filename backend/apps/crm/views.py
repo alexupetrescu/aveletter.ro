@@ -1,6 +1,7 @@
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
 from rest_framework import mixins, viewsets
+from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -24,8 +25,13 @@ from apps.shop.models import (
     ProductInputField,
     ProductOption,
     ProductOptionGroup,
+    ProductRecommendation,
     ProductVariant,
     TextByPagePricing,
+)
+from apps.shop.recommendations import (
+    auto_cross_sell_candidates,
+    auto_upsell_candidates,
 )
 from apps.site_config.models import HomeHero, SiteConfig
 
@@ -73,6 +79,7 @@ class ProductViewSet(CrmViewSet):
             qs = qs.prefetch_related(
                 "variants", "option_groups__options", "input_fields",
                 "productimage_set__asset",
+                "outgoing_recommendations__target__featured_image",
             )
         return qs
 
@@ -80,6 +87,32 @@ class ProductViewSet(CrmViewSet):
         if self.action == "list":
             return s.ProductCrmListSerializer
         return s.ProductCrmDetailSerializer
+
+    @action(detail=True, methods=["get"], url_path="recommendation-suggestions")
+    def recommendation_suggestions(self, request, pk=None):
+        product = self.get_object()
+        manual_upsell_ids = set(
+            product.outgoing_recommendations.filter(
+                kind=ProductRecommendation.Kind.UPSELL,
+            ).values_list("target_id", flat=True)
+        )
+        manual_cross_ids = set(
+            product.outgoing_recommendations.filter(
+                kind=ProductRecommendation.Kind.CROSS_SELL,
+            ).values_list("target_id", flat=True)
+        )
+        upsells = auto_upsell_candidates(
+            product, exclude_ids=manual_upsell_ids,
+        )
+        cross_sells = auto_cross_sell_candidates(
+            product, exclude_ids=manual_cross_ids,
+        )
+        serializer = s.ProductCrmListSerializer
+        ctx = {"request": request}
+        return Response({
+            "upsells": serializer(upsells, many=True, context=ctx).data,
+            "cross_sells": serializer(cross_sells, many=True, context=ctx).data,
+        })
 
 
 class ProductVariantViewSet(CrmViewSet):
@@ -114,6 +147,15 @@ class ProductImageViewSet(CrmViewSet):
     queryset = ProductImage.objects.select_related("asset")
     serializer_class = s.ProductImageCrmSerializer
     filter_fields = {"product": "product_id"}
+    pagination_class = None
+
+
+class ProductRecommendationViewSet(CrmViewSet):
+    queryset = ProductRecommendation.objects.select_related(
+        "target__featured_image", "source",
+    )
+    serializer_class = s.ProductRecommendationCrmSerializer
+    filter_fields = {"product": "source_id", "kind": "kind"}
     pagination_class = None
 
 

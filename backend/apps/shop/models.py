@@ -32,6 +32,7 @@ class Product(Publishable):
         TEXT_BY_PAGE = "text_by_page", "Text priced by page"
         ORNAMENT = "ornament", "Short text ornament"
         CUSTOM_QUOTE = "custom_quote", "Custom quote"
+        PREMADE = "premade", "Premade product (with stock)"
 
     product_type = models.CharField(
         max_length=30, choices=ProductType.choices, default=ProductType.STANDARD,
@@ -53,6 +54,11 @@ class Product(Publishable):
     )
     base_price_amount = models.PositiveIntegerField(
         default=0, help_text="Base price in bani. Example: 5000 = 50 RON.",
+    )
+    # Blank strings collide on unique in Postgres ('' is a real value).
+    # NULL means "no SKU yet"; NULLs are exempt from the unique constraint.
+    sku = models.CharField(
+        max_length=100, unique=True, null=True, blank=True, default=None,
     )
     currency = models.CharField(max_length=3, default="RON")
     # Product can override the site default VAT rate. If empty, the active
@@ -80,6 +86,11 @@ class Product(Publishable):
 
     def __str__(self):
         return self.title
+
+    def save(self, *args, **kwargs):
+        if self.sku == "":
+            self.sku = None
+        super().save(*args, **kwargs)
 
 
 class ProductImage(models.Model):
@@ -231,6 +242,7 @@ class TextByPagePricing(models.Model):
     class PricingMode(models.TextChoices):
         PER_PAGE = "per_page", "Pe pagină"
         PER_WORD = "per_word", "Pe cuvânt"
+        PER_WORD_BLOCK = "per_word_block", "Pe X cuvinte"
         PER_CHARACTER = "per_character", "Pe caracter"
 
     product = models.OneToOneField(
@@ -279,3 +291,35 @@ class TextByPagePricing(models.Model):
                 })
         if self.words_per_page == 0:
             raise ValidationError({"words_per_page": "Cannot be zero."})
+
+
+class ProductRecommendation(models.Model):
+    """Manual upsell / cross-sell link between two products."""
+
+    class Kind(models.TextChoices):
+        UPSELL = "upsell", "Upsell"
+        CROSS_SELL = "cross_sell", "Cross-sell"
+
+    source = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="outgoing_recommendations",
+    )
+    target = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="incoming_recommendations",
+    )
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        unique_together = [("source", "target", "kind")]
+        indexes = [
+            models.Index(fields=["source", "kind", "sort_order"]),
+        ]
+
+    def __str__(self):
+        return f"{self.source.title} → {self.target.title} ({self.kind})"
+
+    def clean(self):
+        super().clean()
+        if self.source_id and self.target_id and self.source_id == self.target_id:
+            raise ValidationError({"target": "Un produs nu poate fi recomandat către el însuși."})

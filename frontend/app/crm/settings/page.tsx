@@ -215,8 +215,8 @@ function DeliveryConfigPanel() {
         </div>
         {fee > 0 && threshold != null && threshold > 0 && (
           <p className="rounded-sm border border-ink/10 bg-ink/5 px-3 py-2 text-sm text-body">
-            Clienții văd: livrare {(fee / 100).toFixed(0)} lei; gratuită peste{" "}
-            {(threshold / 100).toFixed(0)} lei subtotal.
+            Clienții văd: Livrare gratuită pentru comenzi peste{" "}
+            {(threshold / 100).toFixed(0)} lei.
           </p>
         )}
         <Button disabled={saving} onClick={save}>

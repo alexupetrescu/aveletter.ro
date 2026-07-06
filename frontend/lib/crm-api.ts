@@ -139,7 +139,7 @@ export interface CrmTextPricing {
   id: number;
   product: number;
   text_field_key: string;
-  pricing_mode: "per_page" | "per_word" | "per_character";
+  pricing_mode: "per_page" | "per_word" | "per_word_block" | "per_character";
   words_per_page: number;
   price_per_unit_amount: number;
   minimum_pages: number;
@@ -148,17 +148,40 @@ export interface CrmTextPricing {
   round_up: boolean;
 }
 
+export interface CrmProductRecommendation {
+  id: number;
+  source: number;
+  target: number;
+  kind: "upsell" | "cross_sell";
+  sort_order: number;
+  target_data: {
+    id: number;
+    title: string;
+    slug: string;
+    status: string;
+    base_price_amount: number;
+    currency: string;
+    featured_image_data: AssetSummary | null;
+  };
+}
+
+export interface CrmRecommendationSuggestions {
+  upsells: CrmProductList[];
+  cross_sells: CrmProductList[];
+}
+
 export type TiptapDoc = Record<string, unknown>;
 
 export interface CrmProductList {
   id: number;
   title: string;
   slug: string;
-  product_type: "standard" | "text_by_page" | "ornament" | "custom_quote";
+  product_type: "standard" | "text_by_page" | "ornament" | "custom_quote" | "premade";
   status: "draft" | "published" | "archived";
   publish_state: string;
   category: number | null;
   category_name: string | null;
+  sku: string | null;
   base_price_amount: number;
   currency: string;
   is_featured: boolean;

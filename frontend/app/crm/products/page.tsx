@@ -15,6 +15,7 @@ export const PRODUCT_TYPE_LABELS: Record<string, string> = {
   text_by_page: "Text pe pagină",
   ornament: "Ornament",
   custom_quote: "Ofertă personalizată",
+  premade: "Pregătit (cu stoc)",
 };
 
 export default function CrmProductsPage() {

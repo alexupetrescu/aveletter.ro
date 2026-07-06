@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { ApiError, getProduct, getProducts, getSiteConfig } from "@/lib/api";
+import { ApiError, getProduct, getSiteConfig, ProductListItem } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
 import ProductConfigurator from "./ProductConfigurator";
 
@@ -42,6 +42,26 @@ export async function generateMetadata({
   }
 }
 
+function ProductGrid({
+  title,
+  products,
+}: {
+  title: string;
+  products: ProductListItem[];
+}) {
+  if (products.length === 0) return null;
+  return (
+    <div className="mx-auto max-w-[1440px] px-6 pb-16 lg:px-12">
+      <h2 className="mb-10 text-center font-serif text-[32px] font-medium">{title}</h2>
+      <div className="grid grid-cols-1 gap-[38px] sm:grid-cols-2 lg:grid-cols-4">
+        {products.map((p) => (
+          <ProductCard key={p.slug} product={p} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default async function ProductPage({
   params,
 }: {
@@ -58,13 +78,6 @@ export default async function ProductPage({
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) notFound();
     throw err;
-  }
-
-  let related: Awaited<ReturnType<typeof getProducts>> = [];
-  try {
-    related = (await getProducts()).filter((p) => p.slug !== slug).slice(0, 4);
-  } catch {
-    related = [];
   }
 
   return (
@@ -94,19 +107,12 @@ export default async function ProductPage({
       {/* PRODUCT MAIN */}
       <ProductConfigurator product={product} siteConfig={siteConfig} />
 
-      {/* RELATED */}
-      {related.length > 0 && (
-        <div className="mx-auto max-w-[1440px] px-6 pb-32 lg:px-12">
-          <h2 className="mb-10 text-center font-serif text-[32px] font-medium">
-            S-ar putea să-ți placă și
-          </h2>
-          <div className="grid grid-cols-1 gap-[38px] sm:grid-cols-2 lg:grid-cols-4">
-            {related.map((p) => (
-              <ProductCard key={p.slug} product={p} />
-            ))}
-          </div>
-        </div>
-      )}
+      {/* UPSELLS & CROSS-SELLS */}
+      <ProductGrid title="Produse superioare" products={product.upsells ?? []} />
+      <ProductGrid
+        title="Produse complementare"
+        products={product.cross_sells ?? []}
+      />
     </div>
   );
 }

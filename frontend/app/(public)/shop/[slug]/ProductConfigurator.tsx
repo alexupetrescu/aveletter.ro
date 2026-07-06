@@ -18,23 +18,62 @@ import TiptapRenderer, { hasTiptapContent } from "@/components/TiptapRenderer";
 
 const QUOTE_DEBOUNCE_MS = 400;
 
+const TEXT_FIELD_TYPES = new Set(["short_text", "long_text"]);
+
+function isMandatoryField(field: ProductInputField, product: ProductDetail): boolean {
+  if (field.required) return true;
+  if (
+    TEXT_FIELD_TYPES.has(field.field_type) &&
+    (product.product_type === "text_by_page" || product.product_type === "ornament")
+  ) {
+    return true;
+  }
+  if (
+    product.text_pricing?.text_field_key === field.key &&
+    product.product_type === "text_by_page"
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function inputsAreComplete(
+  product: ProductDetail,
+  inputs: Record<string, unknown>,
+  files: Record<string, File>,
+): boolean {
+  for (const field of product.input_fields) {
+    if (field.field_type === "file") {
+      if (isMandatoryField(field, product) && !files[field.key]) return false;
+      continue;
+    }
+    if (!isMandatoryField(field, product)) continue;
+    const value = inputs[field.key];
+    if (!String(value ?? "").trim()) return false;
+  }
+  return true;
+}
+
 function InputFieldControl({
   field,
+  product,
   value,
   onChange,
   onFileChange,
 }: {
   field: ProductInputField;
+  product: ProductDetail;
   value: unknown;
   onChange: (value: unknown) => void;
   onFileChange: (file: File | null) => void;
 }) {
+  const mandatory = isMandatoryField(field, product);
   const label = (
     <label className="mb-2.5 block text-[11px] tracking-[1.5px] text-muted uppercase">
       {field.label}
       {field.min_words ? ` (min. ${field.min_words} cuvinte)` : ""}
       {field.max_words ? ` (max. ${field.max_words} cuvinte)` : ""}
-      {field.required ? " *" : ""}
+      {mandatory ? " *" : ""}
     </label>
   );
 
@@ -51,6 +90,7 @@ function InputFieldControl({
             onChange={(e) => onChange(e.target.value)}
             placeholder={field.placeholder}
             rows={7}
+            required={mandatory}
             className="w-full border border-ink/18 bg-transparent p-4 font-serif text-[17px] leading-[1.8] italic outline-none focus:border-ink"
           />
           {field.help_text && (
@@ -97,6 +137,7 @@ function InputFieldControl({
             value={(value as string) ?? ""}
             onChange={(e) => onChange(e.target.value)}
             placeholder={field.placeholder}
+            required={mandatory}
             className={underlineInput}
           />
         </div>
@@ -109,6 +150,7 @@ function InputFieldControl({
             value={(value as string) ?? ""}
             onChange={(e) => onChange(e.target.value)}
             placeholder={field.placeholder}
+            required={mandatory}
             className={underlineInput}
           />
           {field.help_text && (
@@ -168,6 +210,11 @@ export default function ProductConfigurator({
     }
     return data;
   }, [inputs, product.input_fields]);
+
+  const inputsValid = useMemo(
+    () => inputsAreComplete(product, inputs, files),
+    [product, inputs, files],
+  );
 
   // Server-authoritative price preview: debounce, then ask Django.
   // The client never computes pages or totals itself.
@@ -357,7 +404,8 @@ export default function ProductConfigurator({
           quote &&
           wordCount !== undefined &&
           pricingMode !== "per_character" &&
-          pricingMode !== "per_word" && (
+          pricingMode !== "per_word" &&
+          pricingMode !== "per_word_block" && (
             <div className="mb-6 -mt-4 text-[13px] text-muted">
               {wordCount} cuvinte · {pages}{" "}
               {pages === 1 ? "pagină" : "pagini"} caligrafiate
@@ -372,6 +420,21 @@ export default function ProductConfigurator({
           wordCount !== undefined && (
             <div className="mb-6 -mt-4 text-[13px] text-muted">
               {wordCount} cuvinte tarifate
+            </div>
+          )}
+        {product.product_type === "text_by_page" &&
+          quote &&
+          pricingMode === "per_word_block" &&
+          wordCount !== undefined && (
+            <div className="mb-6 -mt-4 text-[13px] text-muted">
+              {wordCount} cuvinte
+              {quote.breakdown.blocks !== undefined && (
+                <>
+                  {" "}
+                  · {quote.breakdown.blocks}{" "}
+                  {quote.breakdown.blocks === 1 ? "bloc" : "blocuri"} tarifate
+                </>
+              )}
             </div>
           )}
         {product.product_type === "text_by_page" &&
@@ -492,6 +555,7 @@ export default function ProductConfigurator({
           >
             <InputFieldControl
               field={field}
+              product={product}
               value={inputs[field.key]}
               onChange={(value) =>
                 setInputs((prev) => ({ ...prev, [field.key]: value }))
@@ -549,7 +613,7 @@ export default function ProductConfigurator({
           </div>
           <button
             onClick={handleAddToCart}
-            disabled={adding || added || !quote}
+            disabled={adding || added || !quote || !inputsValid || quoteErrors.length > 0}
             className={`flex-1 cursor-pointer text-xs tracking-[2px] disabled:opacity-50 ${
               added
                 ? "bg-olive text-paper"

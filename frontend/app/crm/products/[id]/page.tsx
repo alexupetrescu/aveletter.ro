@@ -38,6 +38,7 @@ import OptionsTab from "@/components/crm/product/OptionsTab";
 import InputFieldsTab from "@/components/crm/product/InputFieldsTab";
 import TextPricingTab from "@/components/crm/product/TextPricingTab";
 import ImagesTab from "@/components/crm/product/ImagesTab";
+import RecommendationsTab from "@/components/crm/product/RecommendationsTab";
 
 type Draft = Partial<CrmProductDetail>;
 
@@ -48,6 +49,7 @@ const TABS = [
   { id: "inputs", label: "Câmpuri client" },
   { id: "pricing", label: "Preț text" },
   { id: "images", label: "Imagini" },
+  { id: "recommendations", label: "Recomandări" },
 ] as const;
 
 function slugify(text: string): string {
@@ -101,6 +103,7 @@ export default function CrmProductEditorPage({
       status: draft.status ?? "draft",
       published_at: draft.published_at ?? null,
       product_type: draft.product_type ?? "standard",
+      sku: draft.sku || null,
       category: draft.category ?? null,
       base_price_amount: draft.base_price_amount ?? 0,
       short_description: draft.short_description ?? "",
@@ -241,6 +244,7 @@ export default function CrmProductEditorPage({
                       }
                     >
                       <option value="standard">Standard</option>
+                      <option value="premade">Pregătit (cu stoc)</option>
                       <option value="ornament">Ornament (text scurt)</option>
                       <option value="text_by_page">Text tarifat pe pagină</option>
                       <option value="custom_quote">Ofertă personalizată</option>
@@ -253,6 +257,12 @@ export default function CrmProductEditorPage({
                     />
                   </Field>
                 </div>
+                <Field label="SKU" hint="Opțional. Cod unic al produsului.">
+                  <TextInput
+                    value={draft.sku ?? ""}
+                    onChange={(e) => patch({ sku: e.target.value || null })}
+                  />
+                </Field>
                 <Field label="Descriere scurtă">
                   <TextArea
                     rows={2}
@@ -407,6 +417,9 @@ export default function CrmProductEditorPage({
         <TextPricingTab productId={product.id} inputFields={product.input_fields} />
       )}
       {!isNew && product && tab === "images" && <ImagesTab productId={product.id} />}
+      {!isNew && product && tab === "recommendations" && (
+        <RecommendationsTab productId={product.id} />
+      )}
 
       {pickerOpen && (
         <MediaPicker

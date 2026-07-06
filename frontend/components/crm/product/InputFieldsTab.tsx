@@ -138,7 +138,12 @@ function InputFieldForm({
       <div className="flex items-center gap-4">
         <Checkbox
           label="Obligatoriu"
-          checked={draft.required ?? false}
+          hint={
+            draft.field_type === "short_text" || draft.field_type === "long_text"
+              ? "Textul clientului este obligatoriu pe produsele de tip scrisoare / ornament."
+              : undefined
+          }
+          checked={draft.required ?? (draft.field_type === "short_text" || draft.field_type === "long_text")}
           onChange={(v) => patch({ required: v })}
         />
         <Button disabled={busy || !draft.key || !draft.label} onClick={() => onSave(draft)}>
@@ -227,7 +232,7 @@ export default function InputFieldsTab({ productId }: { productId: number }) {
           )}
           {editing === "new" ? (
             <InputFieldForm
-              initial={{ field_type: "short_text", sort_order: fields?.length ?? 0 }}
+              initial={{ field_type: "short_text", sort_order: fields?.length ?? 0, required: true }}
               onSave={save}
               onCancel={() => setEditing(null)}
               busy={busy}

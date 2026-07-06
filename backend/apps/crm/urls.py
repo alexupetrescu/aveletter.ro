@@ -13,6 +13,7 @@ router.register("option-groups", views.ProductOptionGroupViewSet)
 router.register("options", views.ProductOptionViewSet)
 router.register("input-fields", views.ProductInputFieldViewSet)
 router.register("product-images", views.ProductImageViewSet)
+router.register("product-recommendations", views.ProductRecommendationViewSet)
 router.register("text-pricing", views.TextByPagePricingViewSet)
 # Blog
 router.register("posts", views.PostViewSet)

@@ -6,13 +6,20 @@ from rest_framework.test import APIClient
 
 from .models import (
     Product,
+    ProductCategory,
     ProductInputField,
     ProductOption,
     ProductOptionGroup,
+    ProductRecommendation,
     ProductVariant,
     TextByPagePricing,
 )
 from .pricing import count_words, quote_product
+from .recommendations import (
+    auto_cross_sell_candidates,
+    auto_upsell_candidates,
+    resolve_recommendations,
+)
 
 
 def make_product(**kwargs):
@@ -107,6 +114,26 @@ class QuoteProductTests(TestCase):
         with self.assertRaises(ValidationError):
             quote_product(product, inputs={})
 
+    def test_text_by_page_rejects_blank_text_even_if_not_flagged_required(self):
+        product = make_product(
+            product_type=Product.ProductType.TEXT_BY_PAGE,
+            base_price_amount=0,
+        )
+        ProductInputField.objects.create(
+            product=product, key="message_text", label="Text",
+            field_type=ProductInputField.FieldType.LONG_TEXT, required=False,
+        )
+        TextByPagePricing.objects.create(
+            product=product,
+            text_field_key="message_text",
+            words_per_page=100,
+            price_per_unit_amount=7000,
+            setup_fee_amount=3000,
+            minimum_pages=1,
+        )
+        with self.assertRaises(ValidationError):
+            quote_product(product, inputs={"message_text": "   "})
+
     def test_max_words_enforced(self):
         product = make_product()
         ProductInputField.objects.create(
@@ -171,6 +198,69 @@ class TextByPageTests(TestCase):
             pricing.full_clean()
 
 
+class TextPerWordBlockTests(TestCase):
+    def setUp(self):
+        self.product = make_product(
+            product_type=Product.ProductType.TEXT_BY_PAGE,
+            base_price_amount=3500,
+        )
+        ProductInputField.objects.create(
+            product=self.product, key="message_text", label="Text",
+            field_type=ProductInputField.FieldType.LONG_TEXT, required=True,
+        )
+        TextByPagePricing.objects.create(
+            product=self.product,
+            text_field_key="message_text",
+            pricing_mode=TextByPagePricing.PricingMode.PER_WORD_BLOCK,
+            words_per_page=100,
+            price_per_unit_amount=3500,
+            setup_fee_amount=0,
+        )
+
+    def quote_words(self, n):
+        text = " ".join(["cuvânt"] * n)
+        return quote_product(self.product, inputs={"message_text": text})
+
+    def test_first_block_uses_base_price_as_setup(self):
+        quote = self.quote_words(100)
+        self.assertEqual(quote.unit_price_amount, 3500)
+        self.assertEqual(quote.breakdown["blocks"], 1)
+        self.assertEqual(quote.breakdown["extra_blocks"], 0)
+
+    def test_extra_blocks_charged(self):
+        quote = self.quote_words(250)
+        self.assertEqual(quote.breakdown["blocks"], 3)
+        self.assertEqual(quote.breakdown["extra_blocks"], 2)
+        self.assertEqual(quote.unit_price_amount, 3500 + 2 * 3500)
+
+
+class TextPerWordSetupFallbackTests(TestCase):
+    def setUp(self):
+        self.product = make_product(
+            product_type=Product.ProductType.TEXT_BY_PAGE,
+            base_price_amount=5000,
+        )
+        ProductInputField.objects.create(
+            product=self.product, key="message_text", label="Text",
+            field_type=ProductInputField.FieldType.LONG_TEXT, required=True,
+        )
+        TextByPagePricing.objects.create(
+            product=self.product,
+            text_field_key="message_text",
+            pricing_mode=TextByPagePricing.PricingMode.PER_WORD,
+            words_per_page=100,
+            price_per_unit_amount=1000,
+            setup_fee_amount=0,
+        )
+
+    def test_setup_fee_defaults_to_base_price(self):
+        quote = quote_product(
+            self.product,
+            inputs={"message_text": "unu doi trei"},
+        )
+        self.assertEqual(quote.unit_price_amount, 5000 + 3 * 1000)
+
+
 class ProductQuoteApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -197,3 +287,63 @@ class ProductQuoteApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["unit_price_amount"], 5000)
+
+
+class RecommendationTests(TestCase):
+    def setUp(self):
+        self.category = ProductCategory.objects.create(name="Scrisori", slug="scrisori")
+        self.product = make_product(
+            slug="base-product",
+            category=self.category,
+            base_price_amount=5000,
+        )
+        self.premium = make_product(
+            slug="premium-product",
+            title="Premium",
+            category=self.category,
+            base_price_amount=12000,
+        )
+        self.complement = make_product(
+            slug="complement-product",
+            title="Complement",
+            category=self.category,
+            base_price_amount=3000,
+        )
+
+    def test_auto_upsell_prefers_higher_priced_same_category(self):
+        upsells = auto_upsell_candidates(self.product)
+        self.assertEqual(len(upsells), 1)
+        self.assertEqual(upsells[0].pk, self.premium.pk)
+
+    def test_auto_cross_sell_same_category(self):
+        cross = auto_cross_sell_candidates(self.product)
+        slugs = {p.slug for p in cross}
+        self.assertIn("complement-product", slugs)
+        self.assertNotIn("base-product", slugs)
+
+    def test_manual_recommendations_take_priority(self):
+        ProductRecommendation.objects.create(
+            source=self.product,
+            target=self.complement,
+            kind=ProductRecommendation.Kind.UPSELL,
+            sort_order=0,
+        )
+        upsells = resolve_recommendations(
+            self.product, ProductRecommendation.Kind.UPSELL, limit=2,
+        )
+        self.assertEqual(upsells[0].pk, self.complement.pk)
+        self.assertEqual(len(upsells), 2)
+        self.assertEqual(upsells[1].pk, self.premium.pk)
+
+    def test_product_detail_includes_recommendations(self):
+        ProductRecommendation.objects.create(
+            source=self.product,
+            target=self.complement,
+            kind=ProductRecommendation.Kind.CROSS_SELL,
+        )
+        client = APIClient()
+        response = client.get(f"/api/shop/products/{self.product.slug}/")
+        self.assertEqual(response.status_code, 200)
+        slugs = [p["slug"] for p in response.data["cross_sells"]]
+        self.assertEqual(slugs[0], "complement-product")
+        self.assertIn("upsells", response.data)

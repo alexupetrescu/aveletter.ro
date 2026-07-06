@@ -6,8 +6,10 @@ from .models import (
     ProductInputField,
     ProductOption,
     ProductOptionGroup,
+    ProductRecommendation,
     ProductVariant,
 )
+from .recommendations import resolve_recommendations
 
 
 def asset_data(asset, request=None, alt_override=""):
@@ -98,7 +100,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            "title", "slug", "product_type", "category", "short_description",
+            "title", "slug", "product_type", "sku", "category", "short_description",
             "featured_image", "base_price_amount", "currency", "is_featured",
         ]
 
@@ -112,11 +114,14 @@ class ProductDetailSerializer(ProductListSerializer):
     option_groups = ProductOptionGroupSerializer(many=True, read_only=True)
     input_fields = ProductInputFieldSerializer(many=True, read_only=True)
     text_pricing = serializers.SerializerMethodField()
+    upsells = serializers.SerializerMethodField()
+    cross_sells = serializers.SerializerMethodField()
 
     class Meta(ProductListSerializer.Meta):
         fields = ProductListSerializer.Meta.fields + [
             "description", "description_text", "gallery", "variants",
             "option_groups", "input_fields", "text_pricing",
+            "upsells", "cross_sells",
             "requires_manual_approval",
             "production_time_min_days", "production_time_max_days",
             "seo_title", "seo_description",
@@ -141,6 +146,14 @@ class ProductDetailSerializer(ProductListSerializer):
         if pricing is None:
             return None
         return {"text_field_key": pricing.text_field_key}
+
+    def get_upsells(self, obj):
+        products = resolve_recommendations(obj, ProductRecommendation.Kind.UPSELL)
+        return ProductListSerializer(products, many=True, context=self.context).data
+
+    def get_cross_sells(self, obj):
+        products = resolve_recommendations(obj, ProductRecommendation.Kind.CROSS_SELL)
+        return ProductListSerializer(products, many=True, context=self.context).data
 
 
 class QuoteRequestSerializer(serializers.Serializer):

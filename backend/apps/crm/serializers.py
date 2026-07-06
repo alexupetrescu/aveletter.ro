@@ -22,6 +22,7 @@ from apps.shop.models import (
     ProductInputField,
     ProductOption,
     ProductOptionGroup,
+    ProductRecommendation,
     ProductVariant,
     TextByPagePricing,
 )
@@ -216,6 +217,46 @@ class TextByPagePricingCrmSerializer(serializers.ModelSerializer):
                 })
         return attrs
 
+    def save(self, **kwargs):
+        instance = super().save(**kwargs)
+        instance.product.input_fields.filter(key=instance.text_field_key).update(
+            required=True,
+        )
+        return instance
+
+
+class ProductRecommendationCrmSerializer(serializers.ModelSerializer):
+    target_data = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductRecommendation
+        fields = [
+            "id", "source", "target", "target_data", "kind", "sort_order",
+        ]
+
+    def get_target_data(self, obj):
+        target = obj.target
+        return {
+            "id": target.pk,
+            "title": target.title,
+            "slug": target.slug,
+            "status": target.status,
+            "base_price_amount": target.base_price_amount,
+            "currency": target.currency,
+            "featured_image_data": asset_summary(
+                target.featured_image, self.context.get("request"),
+            ),
+        }
+
+    def validate(self, attrs):
+        source = attrs.get("source") or (self.instance and self.instance.source)
+        target = attrs.get("target") or (self.instance and self.instance.target)
+        if source and target and source.pk == target.pk:
+            raise serializers.ValidationError({
+                "target": "Un produs nu poate fi recomandat către el însuși.",
+            })
+        return attrs
+
 
 class ProductCrmListSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
@@ -226,7 +267,7 @@ class ProductCrmListSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             "id", "title", "slug", "product_type", "status", "publish_state",
-            "category", "category_name", "base_price_amount", "currency",
+            "category", "category_name", "sku", "base_price_amount", "currency",
             "is_featured", "featured_image_data", "published_at", "updated_at",
         ]
 
@@ -258,6 +299,9 @@ class ProductCrmDetailSerializer(ProductCrmListSerializer):
             "text_pricing",
         ]
         read_only_fields = ["description_text", "updated_at"]
+
+    def validate_sku(self, value):
+        return value or None
 
     def save(self, **kwargs):
         # description is a Tiptap JSON doc; keep the plain-text mirror in sync.

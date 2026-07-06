@@ -23,11 +23,11 @@ export function formatDeliverySummary(
   > | null,
 ): string | null {
   if (!config) return null;
-  const fee = config.delivery_fee_amount ?? 0;
-  if (!fee) return null;
   const threshold = config.free_shipping_threshold_amount;
   if (threshold != null && threshold > 0) {
-    return `Livrare ${formatBani(fee)}; gratuită pentru comenzi de peste ${formatBani(threshold)} (subtotal produse).`;
+    return `Livrare gratuită pentru comenzi peste ${formatBani(threshold)}.`;
   }
+  const fee = config.delivery_fee_amount ?? 0;
+  if (!fee) return null;
   return `Livrare ${formatBani(fee)}.`;
 }

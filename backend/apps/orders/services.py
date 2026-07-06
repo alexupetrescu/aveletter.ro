@@ -316,7 +316,7 @@ def create_order_from_cart(
 
             variant_name=item.variant.name if item.variant else "",
 
-            sku=(item.variant.sku or "") if item.variant else "",
+            sku=(item.variant.sku if item.variant and item.variant.sku else product.sku or ""),
 
             quantity=item.quantity,
 

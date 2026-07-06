@@ -24,8 +24,12 @@ type Draft = Partial<CrmTextPricing>;
 const PRICING_MODES = [
   { value: "per_page", label: "Pe pagină (prima pagină = preț de bază)" },
   { value: "per_word", label: "Pe cuvânt" },
+  { value: "per_word_block", label: "Pe X cuvinte" },
   { value: "per_character", label: "Pe caracter" },
 ] as const;
+
+const SETUP_HINT =
+  "Se adaugă o singură dată. Dacă e 0, se folosește prețul de bază al produsului.";
 
 export default function TextPricingTab({
   productId,
@@ -136,18 +140,32 @@ export default function TextPricingTab({
                 />
               </Field>
             )}
+            {mode === "per_word_block" && (
+              <Field label="Număr de cuvinte" hint="Ex.: 100 cuvinte = un bloc tarifat.">
+                <TextInput
+                  type="number"
+                  min={1}
+                  value={draft.words_per_page ?? 100}
+                  onChange={(e) => patch({ words_per_page: Number(e.target.value) })}
+                />
+              </Field>
+            )}
             <Field
               label={
                 mode === "per_page"
                   ? "Preț pe pagină (suplimentară)"
                   : mode === "per_word"
                     ? "Preț pe cuvânt"
-                    : "Preț pe caracter"
+                    : mode === "per_word_block"
+                      ? "Preț pentru acel număr de cuvinte (bloc suplimentar)"
+                      : "Preț pe caracter"
               }
               hint={
                 mode === "per_page"
                   ? "Prima pagină este inclusă în prețul de bază al produsului."
-                  : undefined
+                  : mode === "per_word_block"
+                    ? "Primul bloc este acoperit de taxa de pornire (sau prețul de bază dacă taxa e 0)."
+                    : undefined
               }
             >
               <MoneyInput
@@ -155,7 +173,7 @@ export default function TextPricingTab({
                 onChange={(v) => patch({ price_per_unit_amount: v ?? 0 })}
               />
             </Field>
-            <Field label="Taxă de pornire" hint="Se adaugă o singură dată.">
+            <Field label="Taxă de pornire" hint={SETUP_HINT}>
               <MoneyInput
                 value={draft.setup_fee_amount ?? 0}
                 onChange={(v) => patch({ setup_fee_amount: v ?? 0 })}
@@ -186,10 +204,14 @@ export default function TextPricingTab({
               </>
             )}
           </div>
-          {mode === "per_page" && (
+          {(mode === "per_page" || mode === "per_word_block") && (
             <Checkbox
               label="Rotunjește în sus"
-              hint="247 cuvinte la 100/pagină = 3 pagini."
+              hint={
+                mode === "per_page"
+                  ? "247 cuvinte la 100/pagină = 3 pagini."
+                  : "247 cuvinte la 100/bloc = 3 blocuri."
+              }
               checked={draft.round_up ?? true}
               onChange={(v) => patch({ round_up: v })}
             />
