@@ -196,18 +196,78 @@ function isMandatoryField(field: ProductInputField, product: ProductDetail): boo
   return false;
 }
 
+function TextStatsLine({
+  field,
+  product,
+  quote,
+  quoting,
+}: {
+  field: ProductInputField;
+  product: ProductDetail;
+  quote: QuoteResponse | null;
+  quoting: boolean;
+}) {
+  if (field.field_type !== "long_text") return null;
+  if (product.product_type !== "text_by_page") return null;
+
+  const pricingKey = product.text_pricing?.text_field_key;
+  if (pricingKey && pricingKey !== field.key) return null;
+
+  const wordCount = quote?.breakdown.word_count;
+  const charCount = quote?.breakdown.char_count;
+  const estimatedPages = quote?.breakdown.estimated_pages;
+  const pricingMode = quote?.breakdown.pricing_mode;
+
+  const hasStats =
+    (wordCount !== undefined && wordCount > 0) ||
+    (pricingMode === "per_character" && charCount !== undefined && charCount > 0) ||
+    (estimatedPages !== undefined && estimatedPages > 0);
+
+  if (quoting && !hasStats) {
+    return (
+      <p className="mb-2 text-[13px] text-muted">se calculează…</p>
+    );
+  }
+
+  if (!hasStats) return null;
+
+  return (
+    <p className="mb-2 text-[13px] text-muted">
+      {pricingMode === "per_character" && charCount !== undefined && charCount > 0 ? (
+        <span>{charCount} caractere</span>
+      ) : wordCount !== undefined && wordCount > 0 ? (
+        <span>{wordCount} cuvinte</span>
+      ) : null}
+      {estimatedPages !== undefined && estimatedPages > 0 && (
+        <span>
+          {(pricingMode === "per_character" && charCount) ||
+          (wordCount !== undefined && wordCount > 0)
+            ? " · "
+            : ""}
+          {estimatedPages}{" "}
+          {estimatedPages === 1 ? "pagină estimată" : "pagini estimate"}
+        </span>
+      )}
+    </p>
+  );
+}
+
 function InputFieldControl({
   field,
   product,
   value,
   onChange,
   onFileChange,
+  quote,
+  quoting,
 }: {
   field: ProductInputField;
   product: ProductDetail;
   value: unknown;
   onChange: (value: unknown) => void;
   onFileChange: (file: File | null) => void;
+  quote: QuoteResponse | null;
+  quoting: boolean;
 }) {
   const [limitError, setLimitError] = useState<string | null>(null);
   const textValue = String(value ?? "");
@@ -259,6 +319,12 @@ function InputFieldControl({
       return (
         <div>
           {label}
+          <TextStatsLine
+            field={field}
+            product={product}
+            quote={quote}
+            quoting={quoting}
+          />
           <textarea
             value={textValue}
             onChange={(e) => handleTextChange(e.target.value)}
@@ -583,16 +649,6 @@ export default function ProductConfigurator({
         product.currency,
       );
 
-  const wordCount = quote?.breakdown.word_count;
-  const charCount = quote?.breakdown.char_count;
-  const estimatedPages = quote?.breakdown.estimated_pages;
-  const pricingMode = quote?.breakdown.pricing_mode;
-  const showTextStats =
-    product.product_type === "text_by_page" &&
-    quote &&
-    ((wordCount !== undefined && wordCount > 0) ||
-      (pricingMode === "per_character" && charCount !== undefined && charCount > 0));
-
   return (
     <div className="mx-auto grid max-w-[1440px] grid-cols-1 gap-12 px-6 pt-10 pb-[110px] lg:grid-cols-2 lg:gap-20 lg:px-12">
       {/* GALLERY */}
@@ -655,25 +711,6 @@ export default function ProductConfigurator({
                 {" "}
                 · {product.availability.quantity}{" "}
                 {product.availability.quantity === 1 ? "bucată" : "bucăți"}
-              </span>
-            )}
-          </div>
-        )}
-        {showTextStats && (
-          <div className="mb-6 -mt-4 text-[13px] text-muted">
-            {pricingMode === "per_character" && charCount !== undefined && charCount > 0 ? (
-              <span>{charCount} caractere</span>
-            ) : wordCount !== undefined && wordCount > 0 ? (
-              <span>{wordCount} cuvinte</span>
-            ) : null}
-            {estimatedPages !== undefined && estimatedPages > 0 && (
-              <span>
-                {(pricingMode === "per_character" && charCount) ||
-                (wordCount !== undefined && wordCount > 0)
-                  ? " · "
-                  : ""}
-                {estimatedPages}{" "}
-                {estimatedPages === 1 ? "pagină estimată" : "pagini estimate"}
               </span>
             )}
           </div>
@@ -799,6 +836,8 @@ export default function ProductConfigurator({
               field={field}
               product={product}
               value={inputs[field.key]}
+              quote={quote}
+              quoting={quoting}
               onChange={(value) =>
                 setInputs((prev) => ({ ...prev, [field.key]: value }))
               }

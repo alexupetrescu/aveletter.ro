@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import HomeHero, SiteConfig
+from .models import HomeHero, HomeInstagram, HomeInstagramImage, SiteConfig
 
 
 @admin.register(SiteConfig)
@@ -20,6 +20,23 @@ class HomeHeroAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return not HomeHero.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class HomeInstagramImageInline(admin.TabularInline):
+    model = HomeInstagramImage
+    extra = 0
+
+
+@admin.register(HomeInstagram)
+class HomeInstagramAdmin(admin.ModelAdmin):
+    list_display = ["updated_at"]
+    inlines = [HomeInstagramImageInline]
+
+    def has_add_permission(self, request):
+        return not HomeInstagram.objects.exists()
 
     def has_delete_permission(self, request, obj=None):
         return False

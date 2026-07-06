@@ -6,12 +6,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   crm,
   CrmHomeHero,
+  CrmHomeInstagramImage,
   CrmSiteConfig,
   CrmTaxConfig,
   CrmVatRate,
 } from "@/lib/crm-api";
 import {
   useCrmCreate,
+  useCrmDelete,
   useCrmList,
   useCrmSingleton,
   useCrmUpdate,
@@ -20,6 +22,7 @@ import {
   Button,
   Card,
   Checkbox,
+  ConfirmDeleteButton,
   Field,
   MoneyInput,
   PageHeader,
@@ -356,6 +359,95 @@ function HomeHeroPanel() {
   );
 }
 
+function HomeInstagramPanel() {
+  const toast = useToast();
+  const { data: images, isLoading } = useCrmList<CrmHomeInstagramImage[]>(
+    "home-instagram-images",
+  );
+  const create = useCrmCreate<CrmHomeInstagramImage>("home-instagram-images");
+  const update = useCrmUpdate<CrmHomeInstagramImage>("home-instagram-images");
+  const remove = useCrmDelete("home-instagram-images");
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const sorted = [...(images ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+  const usedAssetIds = new Set(sorted.map((img) => img.asset));
+
+  return (
+    <Card title="Instagram pagină principală">
+      <p className="text-[13px] text-muted mb-4">
+        Imagini afișate în banda „Din atelier, pe Instagram”. Alege din biblioteca
+        media — ordinea contează.
+      </p>
+      {isLoading ? (
+        <p className="text-muted text-sm">Se încarcă…</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {sorted.map((img) => (
+              <div key={img.id} className="border border-ink/10 rounded-sm p-2 space-y-2">
+                <MediaThumb
+                  asset={img.asset_data}
+                  className="w-full aspect-square rounded-sm"
+                />
+                <div className="flex items-center justify-between gap-2">
+                  <TextInput
+                    type="number"
+                    className="!w-20"
+                    defaultValue={img.sort_order}
+                    onBlur={(e) => {
+                      const v = Number(e.target.value);
+                      if (v !== img.sort_order) {
+                        update.mutate(
+                          { id: img.id, body: { sort_order: v } },
+                          { onError: (err) => toast(err.message, "error") },
+                        );
+                      }
+                    }}
+                  />
+                  <ConfirmDeleteButton
+                    message="Scoți imaginea din banda Instagram?"
+                    onConfirm={() =>
+                      remove.mutate(img.id, {
+                        onSuccess: () => toast("Imaginea a fost scoasă."),
+                        onError: (err) => toast(err.message, "error"),
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          <Button variant="subtle" className="mt-4" onClick={() => setPickerOpen(true)}>
+            + Adaugă imagine
+          </Button>
+        </>
+      )}
+      {pickerOpen && (
+        <MediaPicker
+          onClose={() => setPickerOpen(false)}
+          onSelect={(asset) => {
+            setPickerOpen(false);
+            if (usedAssetIds.has(asset.id)) {
+              toast("Imaginea este deja în banda Instagram.", "error");
+              return;
+            }
+            create.mutate(
+              {
+                asset: asset.id,
+                sort_order: images?.length ?? 0,
+              },
+              {
+                onSuccess: () => toast("Imaginea a fost adăugată."),
+                onError: (err) => toast(err.message, "error"),
+              },
+            );
+          }}
+        />
+      )}
+    </Card>
+  );
+}
+
 function TaxPanel() {
   const toast = useToast();
   const qc = useQueryClient();
@@ -593,6 +685,7 @@ export default function CrmSettingsPage() {
           <DeliveryConfigPanel />
           <SiteConfigPanel />
           <HomeHeroPanel />
+          <HomeInstagramPanel />
         </div>
         <div className="space-y-6">
           <TaxPanel />

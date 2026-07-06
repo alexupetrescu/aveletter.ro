@@ -1,20 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { CrmProductList, Paginated } from "@/lib/crm-api";
+import { checkProductSku, CrmProductList, Paginated } from "@/lib/crm-api";
 import { useCrmList, useCrmUpdate } from "@/lib/crm-hooks";
 import { formatBani } from "@/lib/money";
 import { Button, PageHeader, Select, useToast } from "@/components/crm/ui";
 import { DataTable, FilterChips, SearchInput } from "@/components/crm/DataTable";
 import { MediaThumb } from "@/components/crm/MediaPicker";
-import {
-  isScheduledPublish,
-  PUBLISH_STATUS_OPTIONS,
-  publishStatusSelectValue,
-  PublishStatus,
-} from "@/components/crm/publishStatus";
+import PublishStatusSelect from "@/components/crm/PublishStatusSelect";
+import { SaveStatusIndicator } from "@/components/crm/SaveStatusIndicator";
 import {
   STOCK_STATUS_OPTIONS,
   StockStatus,
@@ -28,7 +24,7 @@ export const PRODUCT_TYPE_LABELS: Record<string, string> = {
   premade: "Pregătit (cu stoc)",
 };
 
-function PublishStatusSelect({
+function PublishStatusCell({
   product,
   onUpdated,
 }: {
@@ -37,43 +33,164 @@ function PublishStatusSelect({
 }) {
   const update = useCrmUpdate<CrmProductList>("products");
   const toast = useToast();
-  const scheduled = isScheduledPublish(product.status, product.published_at);
+  const [saved, setSaved] = useState(false);
 
   return (
-    <Select
-      value={publishStatusSelectValue(product.status, product.published_at)}
-      disabled={update.isPending}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => {
-        const next = e.target.value as PublishStatus | "scheduled";
-        if (next === "scheduled") return;
+    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <PublishStatusSelect
+        compact
+        status={product.status}
+        publishedAt={product.published_at}
+        disabled={update.isPending}
+        onChange={(next) => {
+          const body: Partial<CrmProductList> = { status: next };
+          if (next === "published") {
+            body.published_at = null;
+          }
 
-        const body: Partial<CrmProductList> = { status: next };
-        if (next === "published") {
-          body.published_at = null;
+          update.mutate(
+            { id: product.id, body },
+            {
+              onSuccess: () => {
+                setSaved(true);
+                onUpdated();
+              },
+              onError: (err) => toast(err.message, "error"),
+            },
+          );
+        }}
+      />
+      <SaveStatusIndicator pending={update.isPending} saved={saved && !update.isPending} />
+    </div>
+  );
+}
+
+type SkuAvailability = "idle" | "checking" | "available" | "taken";
+
+function SkuInput({
+  product,
+  onUpdated,
+}: {
+  product: CrmProductList;
+  onUpdated: () => void;
+}) {
+  const update = useCrmUpdate<CrmProductList>("products");
+  const toast = useToast();
+  const [value, setValue] = useState(product.sku ?? "");
+  const [availability, setAvailability] = useState<SkuAvailability>("idle");
+
+  useEffect(() => {
+    setValue(product.sku ?? "");
+    setAvailability("idle");
+  }, [product.id, product.sku]);
+
+  useEffect(() => {
+    const trimmed = value.trim();
+    const current = product.sku ?? "";
+
+    if (trimmed === current) {
+      setAvailability("idle");
+      return;
+    }
+    if (!trimmed) {
+      setAvailability("available");
+      return;
+    }
+
+    setAvailability("checking");
+    const timer = setTimeout(() => {
+      checkProductSku(trimmed, product.id)
+        .then((result) => {
+          setAvailability(result.available ? "available" : "taken");
+        })
+        .catch(() => setAvailability("idle"));
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [value, product.id, product.sku]);
+
+  async function commit() {
+    const sku = value.trim() || null;
+    const current = product.sku ?? null;
+    if (sku === current || (sku === null && current === null)) return;
+
+    if (sku && availability === "taken") {
+      toast("SKU-ul este deja folosit.", "error");
+      setValue(product.sku ?? "");
+      setAvailability("idle");
+      return;
+    }
+
+    if (availability === "checking") {
+      try {
+        const result = await checkProductSku(sku ?? "", product.id);
+        if (sku && !result.available) {
+          toast(result.conflict ?? "SKU-ul este deja folosit.", "error");
+          setValue(product.sku ?? "");
+          setAvailability("idle");
+          return;
         }
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "Verificarea SKU a eșuat.", "error");
+        return;
+      }
+    }
 
-        update.mutate(
-          { id: product.id, body },
-          {
-            onSuccess: onUpdated,
-            onError: (err) => toast(err.message, "error"),
-          },
-        );
-      }}
-      className="text-[12px] py-1 min-w-[7.5rem]"
+    update.mutate(
+      { id: product.id, body: { sku } },
+      {
+        onSuccess: onUpdated,
+        onError: (err) => {
+          toast(err.message, "error");
+          setValue(product.sku ?? "");
+          setAvailability("idle");
+        },
+      },
+    );
+  }
+
+  const showCheck = availability === "available" && value.trim() !== (product.sku ?? "");
+  const showCross = availability === "taken";
+  const borderClass =
+    showCross
+      ? "border-red-400 focus:border-red-500"
+      : showCheck
+        ? "border-olive/50 focus:border-olive"
+        : "border-ink/15 focus:border-gold";
+
+  return (
+    <div
+      className="flex items-center gap-1.5 min-w-[7rem]"
+      onClick={(e) => e.stopPropagation()}
     >
-      {PUBLISH_STATUS_OPTIONS.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-      {scheduled && (
-        <option value="scheduled" disabled>
-          Programat
-        </option>
-      )}
-    </Select>
+      <input
+        type="text"
+        value={value}
+        disabled={update.isPending}
+        placeholder="—"
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => void commit()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            (e.target as HTMLInputElement).blur();
+          }
+          if (e.key === "Escape") {
+            setValue(product.sku ?? "");
+            setAvailability("idle");
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        className={`w-full min-w-[5.5rem] border bg-paper px-2 py-1 text-[12px] font-mono rounded-sm outline-none disabled:opacity-60 ${borderClass}`}
+      />
+      <span className="w-4 shrink-0 text-center text-[13px]" aria-hidden>
+        {availability === "checking" && (
+          <span className="text-muted">…</span>
+        )}
+        {showCheck && <span className="text-olive">✓</span>}
+        {showCross && <span className="text-red-600">✗</span>}
+      </span>
+    </div>
   );
 }
 
@@ -237,6 +354,17 @@ export default function CrmProductsPage() {
             render: (p) => p.category_name ?? "—",
           },
           {
+            key: "sku",
+            header: "SKU",
+            render: (p) => (
+              <SkuInput
+                key={`${p.id}-${p.sku ?? ""}`}
+                product={p}
+                onUpdated={() => refetch()}
+              />
+            ),
+          },
+          {
             key: "stock",
             header: "Stoc",
             className: "text-right",
@@ -265,7 +393,7 @@ export default function CrmProductsPage() {
             key: "state",
             header: "Stare",
             render: (p) => (
-              <PublishStatusSelect product={p} onUpdated={() => refetch()} />
+              <PublishStatusCell product={p} onUpdated={() => refetch()} />
             ),
           },
           {

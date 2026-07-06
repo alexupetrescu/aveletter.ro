@@ -15,7 +15,7 @@ from apps.orders.models import (
     VatRate,
 )
 from apps.payments.models import Payment
-from apps.shop.category_utils import categories_prefetch
+from apps.shop.sku_utils import normalize_sku, sku_conflict_message
 from apps.shop.models import (
     Product,
     ProductCategory,
@@ -28,7 +28,7 @@ from apps.shop.models import (
     ProductVariant,
     TextByPagePricing,
 )
-from apps.site_config.models import HomeHero, SiteConfig
+from apps.site_config.models import HomeHero, HomeInstagram, HomeInstagramImage, SiteConfig
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +160,15 @@ class ProductVariantCrmSerializer(serializers.ModelSerializer):
         ]
 
     def validate_sku(self, value):
-        return value or None
+        sku = normalize_sku(value)
+        exclude_variant = self.instance.pk if self.instance else None
+        conflict = sku_conflict_message(
+            sku,
+            exclude_variant_id=exclude_variant,
+        )
+        if conflict:
+            raise serializers.ValidationError(conflict)
+        return sku
 
 
 class ProductOptionCrmSerializer(serializers.ModelSerializer):
@@ -203,6 +211,26 @@ class ProductImageCrmSerializer(serializers.ModelSerializer):
 
     def get_asset_data(self, obj):
         return asset_summary(obj.asset, self.context.get("request"))
+
+
+class HomeInstagramImageCrmSerializer(serializers.ModelSerializer):
+    asset_data = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HomeInstagramImage
+        fields = ["id", "asset", "asset_data", "sort_order"]
+
+    def get_asset_data(self, obj):
+        return asset_summary(obj.asset, self.context.get("request"))
+
+    def validate_asset(self, value):
+        strip = HomeInstagram.get_solo()
+        qs = HomeInstagramImage.objects.filter(strip=strip, asset=value)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("Imaginea este deja în banda Instagram.")
+        return value
 
 
 class TextByPagePricingCrmSerializer(serializers.ModelSerializer):
@@ -334,7 +362,15 @@ class ProductCrmDetailSerializer(ProductCrmListSerializer):
         read_only_fields = ["description_text", "updated_at"]
 
     def validate_sku(self, value):
-        return value or None
+        sku = normalize_sku(value)
+        exclude_product = self.instance.pk if self.instance else None
+        conflict = sku_conflict_message(
+            sku,
+            exclude_product_id=exclude_product,
+        )
+        if conflict:
+            raise serializers.ValidationError(conflict)
+        return sku
 
     def create(self, validated_data):
         category_ids = validated_data.pop("category_ids", None)

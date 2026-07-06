@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import HomeHero, SiteConfig
+from .models import HomeHero, HomeInstagram, SiteConfig
 
 
 def _asset_url(asset, request):
@@ -8,6 +8,18 @@ def _asset_url(asset, request):
         url = asset.file.url
         return request.build_absolute_uri(url) if request else url
     return None
+
+
+def _asset_data(asset, request):
+    if not asset or not asset.file:
+        return None
+    url = asset.file.url
+    return {
+        "url": request.build_absolute_uri(url) if request else url,
+        "alt_text": asset.alt_text or "",
+        "width": asset.width,
+        "height": asset.height,
+    }
 
 
 class HomeHeroSerializer(serializers.ModelSerializer):
@@ -33,6 +45,7 @@ class HomeHeroSerializer(serializers.ModelSerializer):
 class SiteConfigSerializer(serializers.ModelSerializer):
     default_og_image_url = serializers.SerializerMethodField()
     hero = serializers.SerializerMethodField()
+    instagram_images = serializers.SerializerMethodField()
 
     class Meta:
         model = SiteConfig
@@ -52,6 +65,7 @@ class SiteConfigSerializer(serializers.ModelSerializer):
             "free_shipping_threshold_amount",
             "maintenance_mode",
             "hero",
+            "instagram_images",
         ]
 
     def get_default_og_image_url(self, obj):
@@ -60,3 +74,13 @@ class SiteConfigSerializer(serializers.ModelSerializer):
     def get_hero(self, obj):
         hero = HomeHero.get_solo()
         return HomeHeroSerializer(hero, context=self.context).data
+
+    def get_instagram_images(self, obj):
+        request = self.context.get("request")
+        strip = HomeInstagram.get_solo()
+        images = []
+        for row in strip.images.select_related("asset").all():
+            data = _asset_data(row.asset, request)
+            if data:
+                images.append(data)
+        return images

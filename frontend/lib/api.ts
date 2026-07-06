@@ -163,6 +163,7 @@ export interface SiteConfigData {
   free_shipping_threshold_amount: number | null;
   maintenance_mode: boolean;
   hero: HomeHeroData;
+  instagram_images: AssetData[];
 }
 
 export interface PostAuthor {

@@ -37,7 +37,7 @@ export default function Nav() {
     <div className="border-b border-ink/8 bg-[rgba(248,246,240,0.92)] backdrop-blur-[8px]">
       <div className="mx-auto flex max-w-[1440px] items-center justify-between px-6 py-[18px] lg:px-12">
         <div className="flex flex-1 items-center gap-5 lg:gap-9">
-          <NavLink href="/" active={pathname === "/"}>
+          <NavLink href="/" active={pathname === "/"} className="hidden md:inline">
             ACASĂ
           </NavLink>
           <NavLink href="/shop" active={pathname.startsWith("/shop")}>
@@ -78,6 +78,7 @@ export default function Nav() {
               stroke="#1A1A1A"
               strokeWidth="1.4"
               aria-hidden
+              className="hidden md:block"
             >
               <path d="M12 21s-7.5-4.6-10-9.2C.4 8.4 2 4.5 6 4.2c2.3-.2 3.9 1 6 3 2.1-2 3.7-3.2 6-3 4 .3 5.6 4.2 4 7.6C19.5 16.4 12 21 12 21z" />
             </svg>

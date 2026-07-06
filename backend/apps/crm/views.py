@@ -35,7 +35,7 @@ from apps.shop.recommendations import (
     auto_cross_sell_candidates,
     auto_upsell_candidates,
 )
-from apps.site_config.models import HomeHero, SiteConfig
+from apps.site_config.models import HomeHero, HomeInstagram, HomeInstagramImage, SiteConfig
 
 from . import serializers as s
 from .permissions import CRM_AUTHENTICATION, IsStaff
@@ -95,6 +95,27 @@ class ProductViewSet(CrmViewSet):
         if self.action == "list":
             return s.ProductCrmListSerializer
         return s.ProductCrmDetailSerializer
+
+    @action(detail=False, methods=["get"], url_path="check-sku")
+    def check_sku(self, request):
+        from apps.shop.sku_utils import normalize_sku, sku_conflict_message
+
+        sku = normalize_sku(request.query_params.get("sku"))
+        if not sku:
+            return Response({"available": True, "sku": None})
+
+        exclude_product = request.query_params.get("exclude_product")
+        exclude_variant = request.query_params.get("exclude_variant")
+        conflict = sku_conflict_message(
+            sku,
+            exclude_product_id=int(exclude_product) if exclude_product else None,
+            exclude_variant_id=int(exclude_variant) if exclude_variant else None,
+        )
+        return Response({
+            "available": conflict is None,
+            "sku": sku,
+            "conflict": conflict,
+        })
 
     @action(detail=True, methods=["get"], url_path="recommendation-suggestions")
     def recommendation_suggestions(self, request, pk=None):
@@ -156,6 +177,18 @@ class ProductImageViewSet(CrmViewSet):
     serializer_class = s.ProductImageCrmSerializer
     filter_fields = {"product": "product_id"}
     pagination_class = None
+
+
+class HomeInstagramImageViewSet(CrmViewSet):
+    queryset = HomeInstagramImage.objects.select_related("asset")
+    serializer_class = s.HomeInstagramImageCrmSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return super().get_queryset().filter(strip=HomeInstagram.get_solo())
+
+    def perform_create(self, serializer):
+        serializer.save(strip=HomeInstagram.get_solo())
 
 
 class ProductRecommendationViewSet(CrmViewSet):

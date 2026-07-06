@@ -94,3 +94,49 @@ class HomeHero(models.Model):
         if obj is None:
             obj = cls.objects.create()
         return obj
+
+
+class HomeInstagram(models.Model):
+    """Singleton — ordered images for the homepage Instagram strip."""
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "homepage Instagram strip"
+        verbose_name_plural = "homepage Instagram strip"
+
+    def __str__(self):
+        return "Instagram pagină principală"
+
+    @classmethod
+    def get_solo(cls):
+        obj = cls.objects.first()
+        if obj is None:
+            obj = cls.objects.create()
+        return obj
+
+
+class HomeInstagramImage(models.Model):
+    strip = models.ForeignKey(
+        HomeInstagram,
+        on_delete=models.CASCADE,
+        related_name="images",
+    )
+    asset = models.ForeignKey(
+        "media_library.MediaAsset",
+        on_delete=models.CASCADE,
+        related_name="+",
+    )
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["strip", "asset"],
+                name="unique_home_instagram_asset",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Instagram #{self.sort_order}"

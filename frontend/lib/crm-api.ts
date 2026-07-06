@@ -443,6 +443,13 @@ export interface CrmSiteConfig {
   updated_at: string;
 }
 
+export interface CrmHomeInstagramImage {
+  id: number;
+  asset: number;
+  asset_data: AssetSummary | null;
+  sort_order: number;
+}
+
 export interface CrmHomeHero {
   id: number;
   background_image: number | null;
@@ -544,6 +551,22 @@ function withQuery(path: string, params?: Record<string, string | number | undef
   }
   const str = qs.toString();
   return str ? `${path}?${str}` : path;
+}
+
+export interface CrmSkuCheckResult {
+  available: boolean;
+  sku: string | null;
+  conflict?: string | null;
+}
+
+export async function checkProductSku(
+  sku: string,
+  excludeProductId?: number,
+): Promise<CrmSkuCheckResult> {
+  return crm.get<CrmSkuCheckResult>("/products/check-sku/", {
+    sku,
+    exclude_product: excludeProductId,
+  });
 }
 
 export const crm = {

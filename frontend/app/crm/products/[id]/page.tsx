@@ -32,6 +32,7 @@ import {
 } from "@/components/crm/ui";
 import RichTextEditor from "@/components/crm/RichTextEditor";
 import PublishControls from "@/components/crm/PublishControls";
+import { SaveStatusIndicator } from "@/components/crm/SaveStatusIndicator";
 import MediaPicker, { MediaThumb } from "@/components/crm/MediaPicker";
 import VariantsTab from "@/components/crm/product/VariantsTab";
 import OptionsTab from "@/components/crm/product/OptionsTab";
@@ -96,6 +97,7 @@ export default function CrmProductEditorPage({
   const [draft, setDraft] = useState<Draft>({});
   const [slugTouched, setSlugTouched] = useState(!isNew);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (product) setDraft(product);
@@ -147,7 +149,10 @@ export default function CrmProductEditorPage({
       update.mutate(
         { id, body },
         {
-          onSuccess: () => toast("Produsul a fost salvat."),
+          onSuccess: () => {
+            setSaved(true);
+            toast("Produsul a fost salvat.");
+          },
           onError: (err) => toast(err.message, "error"),
         },
       );
@@ -175,6 +180,7 @@ export default function CrmProductEditorPage({
             <Link href="/crm/products" className="avelink text-[13px] text-muted self-center mr-2">
               ← Produse
             </Link>
+            <SaveStatusIndicator pending={busy} saved={saved && !busy} />
             <Button onClick={save} disabled={busy}>
               {busy ? "Se salvează…" : "Salvează"}
             </Button>

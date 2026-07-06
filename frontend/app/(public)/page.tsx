@@ -251,6 +251,19 @@ export default async function LandingPage() {
             </div>
           ))}
         </div>
+        <div className="mt-16 max-w-[640px] mx-auto text-center">
+          <p className="mb-8 text-[15px] leading-[1.85] text-soft">
+            De la o emoție apare o idee. De la o idee apare vizualul. Povestește-mi
+            ce idee ai legat de personalizarea prin caligrafie și găsim o variantă
+            pe placul tău!
+          </p>
+          <a
+            href={`mailto:${contact.email}`}
+            className="avelink inline-block border border-ink px-[34px] py-4 text-xs tracking-[2px]"
+          >
+            SCRIE-MI
+          </a>
+        </div>
       </div>
 
       {/* INSTAGRAM STRIP */}
@@ -276,34 +289,23 @@ export default async function LandingPage() {
           </a>
         </div>
         <div className="grid grid-cols-2 gap-0.5 sm:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <PhotoBox key={i} aspect="1/1" variant="dark" label="foto" />
-          ))}
-        </div>
-      </div>
-
-      {/* NEWSLETTER */}
-      <div className="px-6 py-20 text-center lg:px-12 lg:py-[110px]">
-        <div className="mx-auto max-w-[520px]">
-          <h2 className="mb-4 font-serif text-[34px] font-medium">
-            Rămâi la curent
-          </h2>
-          <p className="mb-8 text-[14.5px] leading-[1.7] text-muted">
-            Colecții noi de sezon, povești din atelier și idei de cadouri —
-            direct în inbox.
-          </p>
-          <form className="mx-auto flex max-w-[420px] border-b border-ink">
-            <input
-              placeholder="adresa ta de email"
-              className="flex-1 bg-transparent px-1 py-3.5 font-sans text-[13.5px] outline-none"
-            />
-            <button
-              type="submit"
-              className="cursor-pointer px-2 py-3.5 text-xs tracking-[2px]"
+          {(siteConfig?.instagram_images?.length
+            ? siteConfig.instagram_images
+            : null
+          )?.map((asset) => (
+            <a
+              key={asset.url}
+              href={contact.instagram}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="avelink block"
             >
-              ABONEAZĂ-TE →
-            </button>
-          </form>
+              <PhotoBox asset={asset} aspect="1/1" variant="dark" label="foto" />
+            </a>
+          )) ??
+            Array.from({ length: 5 }).map((_, i) => (
+              <PhotoBox key={i} aspect="1/1" variant="dark" label="foto" />
+            ))}
         </div>
       </div>
     </div>
