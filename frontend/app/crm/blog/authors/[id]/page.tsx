@@ -144,12 +144,14 @@ export default function CrmAuthorEditorPage({
           onSelect={(asset) => {
             patch({
               photo: asset.id,
-              photo_data: {
-                id: asset.id,
-                url: asset.url,
-                alt_text: asset.alt_text,
-                title: asset.title,
-              },
+              photo_data: asset.url
+                ? {
+                    id: asset.id,
+                    url: asset.url,
+                    alt_text: asset.alt_text,
+                    title: asset.title,
+                  }
+                : null,
             });
             setPickerOpen(false);
           }}
