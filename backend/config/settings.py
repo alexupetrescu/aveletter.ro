@@ -119,6 +119,9 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+# Ensure nginx (www-data) can read uploads from the gunicorn user.
+FILE_UPLOAD_PERMISSIONS = 0o644
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
 
 # Frontend base URL, used for Stripe redirect URLs.
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3020")

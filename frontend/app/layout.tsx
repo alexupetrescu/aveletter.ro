@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Beau_Rivage, Cormorant_Garamond, Jost } from "next/font/google";
+import Providers from "@/components/Providers";
 import { getSiteConfig } from "@/lib/api";
 import "./globals.css";
 
@@ -58,6 +59,23 @@ export async function generateMetadata(): Promise<Metadata> {
       description,
       ...(ogImage ? { images: [ogImage] } : {}),
     },
+    icons: {
+      icon: [
+        { url: "/favicon_io/favicon.ico" },
+        {
+          url: "/favicon_io/favicon-16x16.png",
+          sizes: "16x16",
+          type: "image/png",
+        },
+        {
+          url: "/favicon_io/favicon-32x32.png",
+          sizes: "32x32",
+          type: "image/png",
+        },
+      ],
+      apple: "/favicon_io/apple-touch-icon.png",
+    },
+    manifest: "/favicon_io/site.webmanifest",
   };
 }
 
@@ -71,7 +89,9 @@ export default function RootLayout({
       lang="ro"
       className={`${jost.variable} ${cormorant.variable} ${beauRivage.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

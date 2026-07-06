@@ -26,10 +26,16 @@ export async function generateMetadata({
       product.short_description ||
       config?.default_seo_description ||
       "";
+    const ogImage = product.featured_image?.url;
     return {
       title,
       description,
-      openGraph: { title, description, type: "website" },
+      openGraph: {
+        title,
+        description,
+        type: "website",
+        ...(ogImage ? { images: [{ url: ogImage }] } : {}),
+      },
     };
   } catch {
     return { title: "Produs — Ave Letter Studio" };

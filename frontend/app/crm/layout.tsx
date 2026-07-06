@@ -1,16 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import LoggedInTopbar from "@/components/LoggedInTopbar";
 import { crmLogout, crmMe } from "@/lib/crm-api";
 import { ToastProvider } from "@/components/crm/ui";
 import { MobileHeader, MobileTabBar } from "@/components/crm/MobileNav";
@@ -109,36 +105,28 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-paper">
-      <Sidebar userName={user.name} />
-      <div className="flex flex-col flex-1 min-w-0 min-h-screen">
-        <div className="lg:hidden">
-          <MobileHeader userName={user.name} />
+    <div className="flex min-h-screen flex-col bg-paper">
+      <LoggedInTopbar />
+      <div className="flex flex-1 min-h-0">
+        <Sidebar userName={user.name} />
+        <div className="flex flex-col flex-1 min-w-0 min-h-screen">
+          <div className="lg:hidden">
+            <MobileHeader userName={user.name} />
+          </div>
+          <main className="flex-1 min-w-0 px-4 py-5 pb-24 lg:px-8 lg:py-8 lg:pb-8">
+            {children}
+          </main>
+          <MobileTabBar userName={user.name} />
         </div>
-        <main className="flex-1 min-w-0 px-4 py-5 pb-24 lg:px-8 lg:py-8 lg:pb-8">
-          {children}
-        </main>
-        <MobileTabBar userName={user.name} />
       </div>
     </div>
   );
 }
 
 export default function CrmLayout({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: { retry: 1, refetchOnWindowFocus: false },
-        },
-      }),
-  );
-
   return (
-    <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <AuthGate>{children}</AuthGate>
-      </ToastProvider>
-    </QueryClientProvider>
+    <ToastProvider>
+      <AuthGate>{children}</AuthGate>
+    </ToastProvider>
   );
 }

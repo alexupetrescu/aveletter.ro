@@ -34,7 +34,7 @@ export default function Nav() {
   const pathname = usePathname();
 
   return (
-    <div className="sticky top-0 z-50 border-b border-ink/8 bg-[rgba(248,246,240,0.92)] backdrop-blur-[8px]">
+    <div className="border-b border-ink/8 bg-[rgba(248,246,240,0.92)] backdrop-blur-[8px]">
       <div className="mx-auto flex max-w-[1440px] items-center justify-between px-6 py-[18px] lg:px-12">
         <div className="flex flex-1 items-center gap-5 lg:gap-9">
           <NavLink href="/" active={pathname === "/"}>

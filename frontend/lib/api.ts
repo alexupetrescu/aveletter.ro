@@ -16,11 +16,17 @@ export interface Category {
   sort_order: number;
 }
 
+/** Nested on product payloads — no category image (see /api/shop/categories/). */
+export interface ProductCategoryRef {
+  name: string;
+  slug: string;
+}
+
 export interface ProductListItem {
   title: string;
   slug: string;
   product_type: "standard" | "text_by_page" | "ornament" | "custom_quote";
-  category: Category | null;
+  category: ProductCategoryRef | null;
   short_description: string;
   featured_image: AssetData | null;
   base_price_amount: number;

@@ -22,6 +22,14 @@ def asset_data(asset, request=None, alt_override=""):
     }
 
 
+class ProductCategoryBriefSerializer(serializers.ModelSerializer):
+    """Nested on products — image omitted; only the categories list endpoint serves it."""
+
+    class Meta:
+        model = ProductCategory
+        fields = ["name", "slug"]
+
+
 class ProductCategorySerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
 
@@ -84,7 +92,7 @@ class ProductInputFieldSerializer(serializers.ModelSerializer):
 
 
 class ProductListSerializer(serializers.ModelSerializer):
-    category = ProductCategorySerializer(read_only=True)
+    category = ProductCategoryBriefSerializer(read_only=True)
     featured_image = serializers.SerializerMethodField()
 
     class Meta:
