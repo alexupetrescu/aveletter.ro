@@ -6,9 +6,15 @@ import { useRouter } from "next/navigation";
 import { CrmProductList, Paginated } from "@/lib/crm-api";
 import { useCrmList, useCrmUpdate } from "@/lib/crm-hooks";
 import { formatBani } from "@/lib/money";
-import { Button, PageHeader, Select, StatusBadge, useToast } from "@/components/crm/ui";
+import { Button, PageHeader, Select, useToast } from "@/components/crm/ui";
 import { DataTable, FilterChips, SearchInput } from "@/components/crm/DataTable";
 import { MediaThumb } from "@/components/crm/MediaPicker";
+import {
+  isScheduledPublish,
+  PUBLISH_STATUS_OPTIONS,
+  publishStatusSelectValue,
+  PublishStatus,
+} from "@/components/crm/publishStatus";
 import {
   STOCK_STATUS_OPTIONS,
   StockStatus,
@@ -21,6 +27,55 @@ export const PRODUCT_TYPE_LABELS: Record<string, string> = {
   custom_quote: "Ofertă personalizată",
   premade: "Pregătit (cu stoc)",
 };
+
+function PublishStatusSelect({
+  product,
+  onUpdated,
+}: {
+  product: CrmProductList;
+  onUpdated: () => void;
+}) {
+  const update = useCrmUpdate<CrmProductList>("products");
+  const toast = useToast();
+  const scheduled = isScheduledPublish(product.status, product.published_at);
+
+  return (
+    <Select
+      value={publishStatusSelectValue(product.status, product.published_at)}
+      disabled={update.isPending}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        const next = e.target.value as PublishStatus | "scheduled";
+        if (next === "scheduled") return;
+
+        const body: Partial<CrmProductList> = { status: next };
+        if (next === "published") {
+          body.published_at = null;
+        }
+
+        update.mutate(
+          { id: product.id, body },
+          {
+            onSuccess: onUpdated,
+            onError: (err) => toast(err.message, "error"),
+          },
+        );
+      }}
+      className="text-[12px] py-1 min-w-[7.5rem]"
+    >
+      {PUBLISH_STATUS_OPTIONS.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+      {scheduled && (
+        <option value="scheduled" disabled>
+          Programat
+        </option>
+      )}
+    </Select>
+  );
+}
 
 function StockStatusSelect({
   product,
@@ -210,10 +265,7 @@ export default function CrmProductsPage() {
             key: "state",
             header: "Stare",
             render: (p) => (
-              <StatusBadge
-                value={p.status === "published" ? p.publish_state : p.status}
-                label={p.publish_state}
-              />
+              <PublishStatusSelect product={p} onUpdated={() => refetch()} />
             ),
           },
           {
