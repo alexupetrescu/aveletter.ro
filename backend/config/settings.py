@@ -123,7 +123,8 @@ MEDIA_ROOT = BASE_DIR / "media"
 FILE_UPLOAD_PERMISSIONS = 0o644
 FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
 
-# Frontend base URL, used for Stripe redirect URLs.
+# Frontend base URL for Stripe redirect URLs and email links.
+# Falls back to SiteConfig.domain when unset or localhost — see apps.core.frontend_url.
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3020")
 
 # Stripe

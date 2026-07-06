@@ -463,6 +463,15 @@ export function resumeCheckout(
   });
 }
 
+export function notifyCheckoutCancelled(
+  orderNumber: string,
+): Promise<{ email_sent: boolean }> {
+  return request<{ email_sent: boolean }>("/api/checkout/cancelled/", {
+    method: "POST",
+    body: JSON.stringify({ order_number: orderNumber }),
+  });
+}
+
 export function getOrder(orderNumber: string): Promise<OrderData> {
   return request<OrderData>(`/api/orders/${orderNumber}/`, {
     cache: "no-store",

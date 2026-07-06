@@ -37,8 +37,10 @@ export default function CheckoutPage() {
 
   const items = cart?.items ?? [];
   const subtotal = cart?.subtotal_amount ?? 0;
-  const shipping = shippingAmountForSubtotal(subtotal, siteConfig);
-  const total = subtotal + shipping;
+  const shipping = siteConfig
+    ? shippingAmountForSubtotal(subtotal, siteConfig)
+    : null;
+  const total = shipping !== null ? subtotal + shipping : null;
 
   const set = (key: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -299,14 +301,20 @@ export default function CheckoutPage() {
           <div className="flex justify-between pt-2 text-[13.5px]">
             <span className="text-muted">Livrare</span>
             <span>
-              {shipping > 0
-                ? formatBani(shipping, cart?.currency)
-                : "Gratuită"}
+              {shipping === null
+                ? "…"
+                : shipping > 0
+                  ? formatBani(shipping, cart?.currency)
+                  : "Gratuită"}
             </span>
           </div>
           <div className="mt-3 flex justify-between border-t border-ink/10 pt-4 text-[15px] font-medium">
             <span>Total</span>
-            <span>{formatBani(total, cart?.currency)}</span>
+            <span>
+              {total !== null
+                ? formatBani(total, cart?.currency)
+                : "…"}
+            </span>
           </div>
           <DeliveryNotice config={siteConfig} className="mt-4" />
           <p className="mt-3 text-[12px] text-stone">

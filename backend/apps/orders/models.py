@@ -216,6 +216,10 @@ class Order(models.Model):
     internal_notes = models.TextField(blank=True)
     placed_at = models.DateTimeField(null=True, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
+    payment_resume_email_sent_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the customer was emailed a link to resume Stripe payment.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

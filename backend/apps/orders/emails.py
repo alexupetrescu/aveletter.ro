@@ -3,7 +3,9 @@ import logging
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
+from django.utils import timezone
 
+from apps.core.frontend_url import resolve_frontend_url
 from apps.core.models import format_bani
 from apps.site_config.models import SiteConfig
 
@@ -117,3 +119,36 @@ def send_order_confirmation_email(order: Order, *, payment_method: str) -> None:
     )
     msg.attach_alternative(html_body, "text/html")
     msg.send()
+
+
+def send_payment_resume_email(order: Order, *, request=None) -> None:
+    """Email customer a link to resume Stripe payment for an unpaid order."""
+    order = (
+        Order.objects.select_related("billing_address", "shipping_address")
+        .prefetch_related("lines")
+        .get(pk=order.pk)
+    )
+
+    frontend = resolve_frontend_url(request).rstrip("/")
+    resume_url = f"{frontend}/checkout/cancelled?order={order.order_number}"
+
+    context = _build_context(order, payment_method="stripe")
+    context["resume_url"] = resume_url
+    context["site_url"] = frontend
+
+    subject = f"Reluare plată — comandă {order.order_number} — Ave Letter"
+    text_body = render_to_string("orders/emails/payment_resume.txt", context)
+    html_body = render_to_string("orders/emails/payment_resume.html", context)
+
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[order.email],
+    )
+    msg.attach_alternative(html_body, "text/html")
+    msg.send()
+
+    Order.objects.filter(pk=order.pk).update(
+        payment_resume_email_sent_at=timezone.now(),
+    )

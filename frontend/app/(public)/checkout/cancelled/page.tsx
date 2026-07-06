@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import FilledLink from "@/components/FilledLink";
 import ResumePaymentButton from "@/components/ResumePaymentButton";
 import type { OrderData } from "@/lib/api";
-import { getOrder } from "@/lib/api";
+import { getOrder, notifyCheckoutCancelled } from "@/lib/api";
 import { formatBani } from "@/lib/money";
 
 function CancelledContent() {
@@ -24,6 +24,12 @@ function CancelledContent() {
       try {
         const data = await getOrder(orderNumber!);
         if (!cancelled) setOrder(data);
+        if (
+          !cancelled &&
+          data.status === "pending_payment"
+        ) {
+          notifyCheckoutCancelled(orderNumber!).catch(() => null);
+        }
       } catch {
         if (!cancelled) setNotFoundOrder(true);
       } finally {

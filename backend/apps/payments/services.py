@@ -4,13 +4,13 @@ from django.conf import settings
 from apps.orders.models import Order
 
 
-def create_checkout_session(order: Order) -> stripe.checkout.Session:
+def create_checkout_session(order: Order, *, frontend_url: str) -> stripe.checkout.Session:
     """
     Create a hosted Stripe Checkout Session for the order. Amounts are in bani,
     which is already Stripe's smallest-unit convention for RON.
     """
     stripe.api_key = settings.STRIPE_SECRET_KEY
-    frontend = settings.FRONTEND_URL.rstrip("/")
+    frontend = frontend_url.rstrip("/")
 
     line_items = []
     for line in order.lines.all():

@@ -8,8 +8,9 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.frontend_url import resolve_frontend_url
 from apps.orders.models import Cart, Order
-from apps.orders.emails import send_order_confirmation_email
+from apps.orders.emails import send_order_confirmation_email, send_payment_resume_email
 from apps.orders.serializers import AddressSerializer
 from apps.orders.services import CheckoutError, create_order_from_cart, mark_order_paid
 from apps.orders.views import _cart_key
@@ -31,9 +32,10 @@ def _stripe_checkout_response(order: Order, session) -> dict:
     }
 
 
-def _start_stripe_payment(order: Order):
+def _start_stripe_payment(order: Order, *, request=None):
     """Create a Stripe Checkout Session and pending Payment for an order."""
-    session = create_checkout_session(order)
+    frontend_url = resolve_frontend_url(request)
+    session = create_checkout_session(order, frontend_url=frontend_url)
     Payment.objects.create(
         order=order,
         provider=Payment.Provider.STRIPE,
@@ -122,8 +124,9 @@ class CheckoutStartView(APIView):
                     "Failed to send order confirmation email for %s",
                     order.order_number,
                 )
+            frontend_url = resolve_frontend_url(request)
             success_url = (
-                f"{settings.FRONTEND_URL}/checkout/success"
+                f"{frontend_url}/checkout/success"
                 f"?order={order.order_number}&payment=ramburs"
             )
             return Response({
@@ -136,7 +139,7 @@ class CheckoutStartView(APIView):
             })
 
         try:
-            session = _start_stripe_payment(order)
+            session = _start_stripe_payment(order, request=request)
         except stripe.error.StripeError:
             logger.exception("Stripe session creation failed for %s", order.order_number)
             return Response(
@@ -145,6 +148,50 @@ class CheckoutStartView(APIView):
             )
 
         return Response(_stripe_checkout_response(order, session))
+
+
+def _notify_checkout_cancelled(order: Order, *, request=None) -> bool:
+    """
+    Mark abandoned Stripe session(s) cancelled and email resume link once.
+    Returns True if a resume email was sent.
+    """
+    if order.status != Order.Status.PENDING_PAYMENT:
+        return False
+
+    Payment.objects.filter(
+        order=order,
+        provider=Payment.Provider.STRIPE,
+        status=Payment.Status.PENDING,
+    ).update(status=Payment.Status.CANCELLED)
+
+    if order.payment_resume_email_sent_at:
+        return False
+
+    try:
+        send_payment_resume_email(order, request=request)
+    except Exception:
+        logger.exception(
+            "Failed to send payment resume email for %s",
+            order.order_number,
+        )
+        return False
+    return True
+
+
+class CheckoutCancelledNotifyView(APIView):
+    """Called when the customer returns from Stripe without paying."""
+
+    def post(self, request):
+        order_number = (request.data.get("order_number") or "").strip()
+        if not order_number:
+            return Response(
+                {"errors": ["Numărul comenzii este obligatoriu."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        order = get_object_or_404(Order, order_number=order_number)
+        email_sent = _notify_checkout_cancelled(order, request=request)
+        return Response({"email_sent": email_sent})
 
 
 class CheckoutResumeView(APIView):
@@ -191,7 +238,7 @@ class CheckoutResumeView(APIView):
         ).update(status=Payment.Status.CANCELLED)
 
         try:
-            session = _start_stripe_payment(order)
+            session = _start_stripe_payment(order, request=request)
         except stripe.error.StripeError:
             logger.exception("Stripe resume failed for %s", order.order_number)
             return Response(
@@ -217,6 +264,8 @@ class StripeWebhookView(APIView):
 
         if event["type"] == "checkout.session.completed":
             self._handle_session_completed(event)
+        elif event["type"] == "checkout.session.expired":
+            self._handle_session_expired(event)
 
         return Response({"received": True})
 
@@ -260,3 +309,40 @@ class StripeWebhookView(APIView):
         ])
 
         mark_order_paid(payment.order)
+
+    @transaction.atomic
+    def _handle_session_expired(self, event):
+        session = event["data"]["object"]
+        payment = (
+            Payment.objects.select_for_update()
+            .filter(stripe_checkout_session_id=session["id"])
+            .select_related("order")
+            .first()
+        )
+        if payment is None:
+            return
+        if payment.last_event_id == event["id"]:
+            return
+        if payment.status != Payment.Status.PENDING:
+            return
+
+        payment.status = Payment.Status.CANCELLED
+        payment.last_event_id = event["id"]
+        payment.raw_payload = {"id": event["id"], "type": event["type"]}
+        payment.save(update_fields=[
+            "status", "last_event_id", "raw_payload", "updated_at",
+        ])
+
+        order = payment.order
+        if order.status != Order.Status.PENDING_PAYMENT:
+            return
+        if order.payment_resume_email_sent_at:
+            return
+
+        try:
+            send_payment_resume_email(order)
+        except Exception:
+            logger.exception(
+                "Failed to send payment resume email for expired session %s",
+                order.order_number,
+            )

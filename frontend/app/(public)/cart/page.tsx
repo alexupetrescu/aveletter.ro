@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { getSiteConfig, type SiteConfigData } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { formatBani } from "@/lib/money";
+import { shippingAmountForSubtotal } from "@/lib/shipping";
 import DeliveryNotice from "@/components/DeliveryNotice";
 import FilledLink from "@/components/FilledLink";
 import PhotoBox from "@/components/PhotoBox";
@@ -35,6 +36,11 @@ export default function CartPage() {
 
   const items = cart?.items ?? [];
   const subtotal = cart?.subtotal_amount ?? 0;
+  const shipping = siteConfig
+    ? shippingAmountForSubtotal(subtotal, siteConfig)
+    : null;
+  const total =
+    shipping !== null ? subtotal + shipping : null;
 
   async function handleRemove(itemId: number) {
     setRemovingId(itemId);
@@ -178,6 +184,24 @@ export default function CartPage() {
             <div className="flex w-full max-w-[360px] justify-between text-[15px]">
               <span className="text-muted">Subtotal</span>
               <span>{formatBani(subtotal, cart?.currency)}</span>
+            </div>
+            <div className="flex w-full max-w-[360px] justify-between text-[15px]">
+              <span className="text-muted">Livrare</span>
+              <span>
+                {shipping === null
+                  ? "…"
+                  : shipping > 0
+                    ? formatBani(shipping, cart?.currency)
+                    : "Gratuită"}
+              </span>
+            </div>
+            <div className="flex w-full max-w-[360px] justify-between text-[15px] font-medium">
+              <span>Total estimat</span>
+              <span>
+                {total !== null
+                  ? formatBani(total, cart?.currency)
+                  : "…"}
+              </span>
             </div>
             <DeliveryNotice config={siteConfig} className="max-w-[360px] text-right" />
             <FilledLink href="/checkout" className="mt-3 px-[42px]">

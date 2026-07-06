@@ -1,0 +1,18 @@
+Bună{% if shipping_address %}, {{ shipping_address.full_name }}{% endif %}!
+
+Plata pentru comanda {{ order.order_number }} nu a fost finalizată.
+
+Comanda ta este încă rezervată. Poți relua plata securizată cu cardul folosind linkul de mai jos:
+
+{{ resume_url }}
+
+--- SUMAR ---
+
+{% for row in totals %}{{ row.label }}: {{ row.value }}
+{% endfor %}
+
+Dacă ai întrebări, scrie-ne la {{ site.contact_email|default:"adina@aveletter.ro" }}{% if site.contact_phone %} sau sună la {{ site.contact_phone }}{% endif %}.
+
+Cu drag,
+Ave Letter
+{{ site_url }}
