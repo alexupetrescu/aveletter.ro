@@ -237,7 +237,6 @@ function HomeHeroPanel() {
   const [draft, setDraft] = useState<Partial<CrmHomeHero>>({});
   const [saving, setSaving] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [bgPreview, setBgPreview] = useState<{ url: string; alt_text?: string } | null>(null);
 
   useEffect(() => {
     if (hero) setDraft(hero);
@@ -248,8 +247,19 @@ function HomeHeroPanel() {
   async function save() {
     setSaving(true);
     try {
-      await crm.patch<CrmHomeHero>("/home-hero/", draft);
-      qc.invalidateQueries({ queryKey: ["crm", "home-hero"] });
+      const body = {
+        background_image: draft.background_image ?? null,
+        tagline: draft.tagline ?? "",
+        title: draft.title ?? "",
+        copy: draft.copy ?? "",
+        primary_button_label: draft.primary_button_label ?? "",
+        primary_button_url: draft.primary_button_url ?? "",
+        secondary_button_label: draft.secondary_button_label ?? "",
+        secondary_button_url: draft.secondary_button_url ?? "",
+      };
+      const saved = await crm.patch<CrmHomeHero>("/home-hero/", body);
+      qc.setQueryData(["crm", "home-hero"], saved);
+      setDraft(saved);
       toast("Hero-ul paginii principale a fost salvat.");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Eroare la salvare.", "error");
@@ -272,7 +282,7 @@ function HomeHeroPanel() {
         <Field label="Imagine fundal">
           <div className="flex items-center gap-3">
             <MediaThumb
-              asset={bgPreview}
+              asset={draft.background_image_data ?? null}
               className="w-24 h-16 rounded-sm border border-ink/10"
             />
             <Button variant="subtle" onClick={() => setPickerOpen(true)}>
@@ -281,10 +291,9 @@ function HomeHeroPanel() {
             {draft.background_image && (
               <Button
                 variant="subtle"
-                onClick={() => {
-                  patch({ background_image: null });
-                  setBgPreview(null);
-                }}
+                onClick={() =>
+                  patch({ background_image: null, background_image_data: null })
+                }
               >
                 Elimină
               </Button>
@@ -346,12 +355,17 @@ function HomeHeroPanel() {
           onClose={() => setPickerOpen(false)}
           onSelect={(asset) => {
             setPickerOpen(false);
-            patch({ background_image: asset.id });
-            setBgPreview(
-              asset.url
-                ? { url: asset.url, alt_text: asset.alt_text }
+            patch({
+              background_image: asset.id,
+              background_image_data: asset.url
+                ? {
+                    id: asset.id,
+                    url: asset.url,
+                    alt_text: asset.alt_text,
+                    title: asset.title,
+                  }
                 : null,
-            );
+            });
           }}
         />
       )}

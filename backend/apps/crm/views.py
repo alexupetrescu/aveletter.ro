@@ -468,14 +468,28 @@ class HomeHeroCrmView(APIView):
     permission_classes = [IsStaff]
 
     def get(self, request):
-        return Response(s.HomeHeroCrmSerializer(HomeHero.get_solo()).data)
+        hero = HomeHero.objects.select_related("background_image").get(
+            pk=HomeHero.get_solo().pk,
+        )
+        return Response(
+            s.HomeHeroCrmSerializer(hero, context={"request": request}).data,
+        )
 
     def patch(self, request):
         hero = HomeHero.get_solo()
-        serializer = s.HomeHeroCrmSerializer(hero, data=request.data, partial=True)
+        serializer = s.HomeHeroCrmSerializer(
+            hero,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(serializer.data)
+        hero.refresh_from_db()
+        hero = HomeHero.objects.select_related("background_image").get(pk=hero.pk)
+        return Response(
+            s.HomeHeroCrmSerializer(hero, context={"request": request}).data,
+        )
 
 
 # ---------------------------------------------------------------------------

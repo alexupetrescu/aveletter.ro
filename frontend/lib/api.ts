@@ -326,7 +326,7 @@ export function getPost(slug: string): Promise<PostDetail> {
 
 export function getSiteConfig(): Promise<SiteConfigData> {
   return request<SiteConfigData>("/api/site-config/", {
-    next: { revalidate: 60 },
+    cache: "no-store",
   } as RequestInit);
 }
 

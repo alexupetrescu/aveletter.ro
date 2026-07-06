@@ -644,10 +644,16 @@ class SiteConfigCrmSerializer(serializers.ModelSerializer):
 
 
 class HomeHeroCrmSerializer(serializers.ModelSerializer):
+    background_image_data = serializers.SerializerMethodField()
+
     class Meta:
         model = HomeHero
         fields = [
-            "id", "background_image", "tagline", "title", "copy",
+            "id", "background_image", "background_image_data", "tagline", "title", "copy",
             "primary_button_label", "primary_button_url",
             "secondary_button_label", "secondary_button_url", "updated_at",
         ]
+        read_only_fields = ["background_image_data", "updated_at"]
+
+    def get_background_image_data(self, obj):
+        return asset_summary(obj.background_image, self.context.get("request"))

@@ -7,7 +7,7 @@ import PhotoBox from "@/components/PhotoBox";
 import FilledLink from "@/components/FilledLink";
 import ProductCard from "@/components/ProductCard";
 
-export const revalidate = 60;
+export const revalidate = 0;
 
 const CALIGRAPHY_YEARS = new Date().getFullYear() - 2017;
 

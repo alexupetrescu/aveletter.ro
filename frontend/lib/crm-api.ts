@@ -453,6 +453,7 @@ export interface CrmHomeInstagramImage {
 export interface CrmHomeHero {
   id: number;
   background_image: number | null;
+  background_image_data: AssetSummary | null;
   tagline: string;
   title: string;
   copy: string;
