@@ -12,6 +12,18 @@ from .models import (
 from .recommendations import resolve_recommendations
 
 
+def _ordered_assignments(product):
+    return sorted(
+        product.category_assignments.all(),
+        key=lambda a: (not a.is_primary, a.sort_order),
+    )
+
+
+def _primary_assignment(product):
+    assignments = _ordered_assignments(product)
+    return assignments[0] if assignments else None
+
+
 def asset_data(asset, request=None, alt_override=""):
     if not asset or not asset.file:
         return None
@@ -94,16 +106,33 @@ class ProductInputFieldSerializer(serializers.ModelSerializer):
 
 
 class ProductListSerializer(serializers.ModelSerializer):
-    category = ProductCategoryBriefSerializer(read_only=True)
+    category = serializers.SerializerMethodField()
+    categories = serializers.SerializerMethodField()
     featured_image = serializers.SerializerMethodField()
     availability = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = [
-            "title", "slug", "product_type", "sku", "category", "short_description",
+            "title", "slug", "product_type", "sku", "category", "categories",
+            "short_description",
             "featured_image", "base_price_amount", "currency", "is_featured",
             "availability",
+        ]
+
+    def get_category(self, obj):
+        assignment = _primary_assignment(obj)
+        if not assignment:
+            return None
+        return ProductCategoryBriefSerializer(assignment.category).data
+
+    def get_categories(self, obj):
+        return [
+            {
+                **ProductCategoryBriefSerializer(a.category).data,
+                "is_primary": a.is_primary,
+            }
+            for a in _ordered_assignments(obj)
         ]
 
     def get_featured_image(self, obj):

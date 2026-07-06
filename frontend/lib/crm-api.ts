@@ -173,6 +173,14 @@ export interface CrmRecommendationSuggestions {
 
 export type TiptapDoc = Record<string, unknown>;
 
+export interface CrmProductCategoryOnProduct {
+  id: number;
+  name: string;
+  slug: string;
+  is_primary: boolean;
+  sort_order: number;
+}
+
 export interface CrmProductList {
   id: number;
   title: string;
@@ -182,6 +190,7 @@ export interface CrmProductList {
   publish_state: string;
   category: number | null;
   category_name: string | null;
+  categories: CrmProductCategoryOnProduct[];
   sku: string | null;
   base_price_amount: number;
   currency: string;
@@ -194,6 +203,8 @@ export interface CrmProductList {
 }
 
 export interface CrmProductDetail extends CrmProductList {
+  category_ids?: number[];
+  primary_category_id?: number | null;
   short_description: string;
   description: TiptapDoc;
   description_text: string;

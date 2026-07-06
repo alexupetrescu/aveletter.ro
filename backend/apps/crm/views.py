@@ -19,6 +19,7 @@ from apps.orders.models import (
     VatRate,
 )
 from apps.payments.models import Payment
+from apps.shop.category_utils import categories_prefetch
 from apps.shop.models import (
     Product,
     ProductCategory,
@@ -61,26 +62,32 @@ class CrmViewSet(viewsets.ModelViewSet):
 
 class ProductCategoryViewSet(CrmViewSet):
     queryset = ProductCategory.objects.annotate(
-        product_count=Count("products"),
+        product_count=Count("products", distinct=True),
     ).select_related("image")
     serializer_class = s.ProductCategoryCrmSerializer
     pagination_class = None
 
 
 class ProductViewSet(CrmViewSet):
-    queryset = Product.objects.select_related("category", "featured_image")
-    filter_fields = {"status": "status", "category": "category__slug"}
+    queryset = (
+        Product.objects.select_related("featured_image")
+        .prefetch_related(categories_prefetch())
+    )
+    filter_fields = {"status": "status", "category": "categories__slug"}
 
     def get_queryset(self):
         qs = super().get_queryset().order_by("-updated_at")
         search = self.request.query_params.get("search")
         if search:
             qs = qs.filter(Q(title__icontains=search) | Q(slug__icontains=search))
+        if self.request.query_params.get("category"):
+            qs = qs.distinct()
         if self.action != "list":
             qs = qs.prefetch_related(
                 "variants", "option_groups__options", "input_fields",
                 "productimage_set__asset",
                 "outgoing_recommendations__target__featured_image",
+                categories_prefetch("outgoing_recommendations__target"),
             )
         return qs
 

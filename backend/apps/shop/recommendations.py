@@ -6,14 +6,19 @@ from django.db.models import Case, Count, IntegerField, Q, When
 
 from apps.orders.models import OrderLine
 
-from .models import Product, ProductRecommendation
+from .category_utils import categories_prefetch, product_category_ids
+from .models import Product, ProductCategory, ProductRecommendation
 
 MAX_UPSELLS = 4
 MAX_CROSS_SELLS = 4
 
 
 def _live_products(exclude_ids: set[int] | None = None):
-    qs = Product.objects.live().select_related("category", "featured_image")
+    qs = (
+        Product.objects.live()
+        .select_related("featured_image")
+        .prefetch_related(categories_prefetch())
+    )
     if exclude_ids:
         qs = qs.exclude(pk__in=exclude_ids)
     return qs
@@ -24,7 +29,8 @@ def _manual_targets(product: Product, kind: str) -> list[Product]:
         rec.target
         for rec in (
             ProductRecommendation.objects.filter(source=product, kind=kind)
-            .select_related("target__category", "target__featured_image")
+            .select_related("target__featured_image")
+            .prefetch_related(categories_prefetch("target"))
             .order_by("sort_order", "id")
         )
         if rec.target.is_live
@@ -79,12 +85,13 @@ def auto_upsell_candidates(
                 return
 
     remaining = limit
-    if product.category_id:
+    cat_ids = product_category_ids(product)
+    if cat_ids:
         take(
             _live_products(exclude).filter(
-                category=product.category,
+                category_assignments__category_id__in=cat_ids,
                 base_price_amount__gt=base_price,
-            ).order_by("base_price_amount")[:remaining],
+            ).distinct().order_by("base_price_amount")[:remaining],
             remaining,
         )
         remaining = limit - len(found)
@@ -132,14 +139,19 @@ def auto_cross_sell_candidates(
 
     add_items(_co_purchased_products(product, limit=limit))
 
-    if len(found) < limit and product.category_id:
-        sibling_q = Q(category=product.category)
-        if product.category.parent_id:
-            sibling_q |= Q(category__parent=product.category.parent)
+    cat_ids = product_category_ids(product)
+    if len(found) < limit and cat_ids:
+        sibling_q = Q(category_assignments__category_id__in=cat_ids)
+        parent_ids = list(
+            ProductCategory.objects.filter(
+                pk__in=cat_ids, parent_id__isnull=False,
+            ).values_list("parent_id", flat=True)
+        )
+        if parent_ids:
+            sibling_q |= Q(category_assignments__category__parent_id__in=parent_ids)
         add_items(
-            _live_products(exclude).filter(sibling_q).order_by("-is_featured", "title")[
-                : limit - len(found)
-            ],
+            _live_products(exclude).filter(sibling_q).distinct()
+            .order_by("-is_featured", "title")[: limit - len(found)],
         )
 
     if len(found) < limit:

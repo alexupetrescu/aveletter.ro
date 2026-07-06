@@ -63,6 +63,17 @@ function slugify(text: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+function selectedCategoryIds(draft: Draft): number[] {
+  if (draft.category_ids) return draft.category_ids;
+  return draft.categories?.map((c) => c.id) ?? (draft.category ? [draft.category] : []);
+}
+
+function primaryCategoryId(draft: Draft): number | null {
+  if (draft.primary_category_id !== undefined) return draft.primary_category_id;
+  const primary = draft.categories?.find((c) => c.is_primary);
+  return primary?.id ?? draft.category ?? selectedCategoryIds(draft)[0] ?? null;
+}
+
 export default function CrmProductEditorPage({
   params,
 }: {
@@ -104,7 +115,8 @@ export default function CrmProductEditorPage({
       published_at: draft.published_at ?? null,
       product_type: draft.product_type ?? "standard",
       sku: draft.sku || null,
-      category: draft.category ?? null,
+      category_ids: selectedCategoryIds(draft),
+      primary_category_id: primaryCategoryId(draft),
       base_price_amount: draft.base_price_amount ?? 0,
       short_description: draft.short_description ?? "",
       description: (draft.description as TiptapDoc) ?? {},
@@ -209,32 +221,63 @@ export default function CrmProductEditorPage({
                     }}
                   />
                 </Field>
-                <div className="grid grid-cols-2 gap-4">
-                  <Field label="Slug">
-                    <TextInput
-                      value={draft.slug ?? ""}
-                      onChange={(e) => {
-                        setSlugTouched(true);
-                        patch({ slug: e.target.value });
-                      }}
-                    />
-                  </Field>
-                  <Field label="Categorie">
-                    <Select
-                      value={draft.category ?? ""}
-                      onChange={(e) =>
-                        patch({ category: e.target.value ? Number(e.target.value) : null })
-                      }
-                    >
-                      <option value="">— Fără categorie —</option>
-                      {categories?.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                </div>
+                <Field label="Slug">
+                  <TextInput
+                    value={draft.slug ?? ""}
+                    onChange={(e) => {
+                      setSlugTouched(true);
+                      patch({ slug: e.target.value });
+                    }}
+                  />
+                </Field>
+                <Field
+                  label="Categorii"
+                  hint="Un produs poate aparține mai multor categorii. Categoria principală apare pe site."
+                >
+                  <div className="space-y-2 rounded border border-ink/10 p-3">
+                    {categories?.length ? (
+                      categories.map((c) => {
+                        const ids = selectedCategoryIds(draft);
+                        const checked = ids.includes(c.id);
+                        const isPrimary = primaryCategoryId(draft) === c.id;
+                        return (
+                          <div key={c.id} className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                            <Checkbox
+                              label={c.name}
+                              checked={checked}
+                              onChange={(nextChecked) => {
+                                const nextIds = nextChecked
+                                  ? [...ids, c.id]
+                                  : ids.filter((id) => id !== c.id);
+                                const currentPrimary = primaryCategoryId(draft);
+                                patch({
+                                  category_ids: nextIds,
+                                  primary_category_id: nextIds.includes(currentPrimary ?? -1)
+                                    ? currentPrimary
+                                    : nextIds[0] ?? null,
+                                });
+                              }}
+                            />
+                            {checked && (
+                              <label className="flex items-center gap-1.5 text-[12px] text-muted cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="primary-category"
+                                  checked={isPrimary}
+                                  onChange={() => patch({ primary_category_id: c.id })}
+                                  className="accent-[#5a6437]"
+                                />
+                                Principală
+                              </label>
+                            )}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="text-[13px] text-muted">Nu există categorii definite.</p>
+                    )}
+                  </div>
+                </Field>
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Tip produs" hint="Determină modul de calcul al prețului.">
                     <Select

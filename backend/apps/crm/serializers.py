@@ -15,9 +15,11 @@ from apps.orders.models import (
     VatRate,
 )
 from apps.payments.models import Payment
+from apps.shop.category_utils import categories_prefetch
 from apps.shop.models import (
     Product,
     ProductCategory,
+    ProductCategoryAssignment,
     ProductImage,
     ProductInputField,
     ProductOption,
@@ -137,6 +139,16 @@ class ProductCategoryCrmSerializer(serializers.ModelSerializer):
 
     def get_image_data(self, obj):
         return asset_summary(obj.image, self.context.get("request"))
+
+
+class ProductCategoryOnProductCrmSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(source="category.id")
+    name = serializers.CharField(source="category.name")
+    slug = serializers.CharField(source="category.slug")
+
+    class Meta:
+        model = ProductCategoryAssignment
+        fields = ["id", "name", "slug", "is_primary", "sort_order"]
 
 
 class ProductVariantCrmSerializer(serializers.ModelSerializer):
@@ -259,7 +271,11 @@ class ProductRecommendationCrmSerializer(serializers.ModelSerializer):
 
 
 class ProductCrmListSerializer(serializers.ModelSerializer):
-    category_name = serializers.CharField(source="category.name", read_only=True)
+    category = serializers.SerializerMethodField()
+    category_name = serializers.SerializerMethodField()
+    categories = ProductCategoryOnProductCrmSerializer(
+        source="category_assignments", many=True, read_only=True,
+    )
     featured_image_data = serializers.SerializerMethodField()
     publish_state = serializers.SerializerMethodField()
 
@@ -267,10 +283,19 @@ class ProductCrmListSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             "id", "title", "slug", "product_type", "status", "publish_state",
-            "category", "category_name", "sku", "base_price_amount", "currency",
+            "category", "category_name", "categories", "sku", "base_price_amount",
+            "currency",
             "is_featured", "featured_image_data", "published_at", "updated_at",
             "stock_quantity", "stock_status",
         ]
+
+    def get_category(self, obj):
+        primary = obj.primary_category
+        return primary.pk if primary else None
+
+    def get_category_name(self, obj):
+        names = [a.category.name for a in obj.category_assignments.all()]
+        return ", ".join(names) if names else None
 
     def get_featured_image_data(self, obj):
         return asset_summary(obj.featured_image, self.context.get("request"))
@@ -282,6 +307,12 @@ class ProductCrmListSerializer(serializers.ModelSerializer):
 
 
 class ProductCrmDetailSerializer(ProductCrmListSerializer):
+    category_ids = serializers.ListField(
+        child=serializers.IntegerField(), required=False, write_only=True,
+    )
+    primary_category_id = serializers.IntegerField(
+        required=False, allow_null=True, write_only=True,
+    )
     variants = ProductVariantCrmSerializer(many=True, read_only=True)
     option_groups = ProductOptionGroupCrmSerializer(many=True, read_only=True)
     input_fields = ProductInputFieldCrmSerializer(many=True, read_only=True)
@@ -292,6 +323,7 @@ class ProductCrmDetailSerializer(ProductCrmListSerializer):
 
     class Meta(ProductCrmListSerializer.Meta):
         fields = ProductCrmListSerializer.Meta.fields + [
+            "category_ids", "primary_category_id",
             "short_description", "description", "description_text",
             "featured_image", "vat_rate", "requires_manual_approval",
             "production_time_min_days", "production_time_max_days",
@@ -303,6 +335,22 @@ class ProductCrmDetailSerializer(ProductCrmListSerializer):
 
     def validate_sku(self, value):
         return value or None
+
+    def create(self, validated_data):
+        category_ids = validated_data.pop("category_ids", None)
+        primary_category_id = validated_data.pop("primary_category_id", None)
+        product = super().create(validated_data)
+        if category_ids is not None:
+            product.set_categories(category_ids, primary_category_id)
+        return product
+
+    def update(self, instance, validated_data):
+        category_ids = validated_data.pop("category_ids", None)
+        primary_category_id = validated_data.pop("primary_category_id", None)
+        product = super().update(instance, validated_data)
+        if category_ids is not None:
+            product.set_categories(category_ids, primary_category_id)
+        return product
 
     def save(self, **kwargs):
         # description is a Tiptap JSON doc; keep the plain-text mirror in sync.

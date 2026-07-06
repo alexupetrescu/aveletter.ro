@@ -15,6 +15,11 @@ export default function ProductCard({
       ? "preț personalizat"
       : formatBani(product.base_price_amount, product.currency);
 
+  const primaryCategory =
+    product.categories?.find((c) => c.is_primary) ??
+    product.categories?.[0] ??
+    product.category;
+
   return (
     <Link href={`/shop/${product.slug}`} className="avelink block">
       <div className="relative mb-5">
@@ -29,9 +34,9 @@ export default function ProductCard({
           </div>
         )}
       </div>
-      {showCategory && product.category && (
+      {showCategory && primaryCategory && (
         <div className="mb-1.5 text-[10.5px] tracking-[1.5px] text-olive uppercase">
-          {product.category.name}
+          {primaryCategory.name}
         </div>
       )}
       <h3 className="mb-2 font-serif text-[18.5px] font-medium text-ink">

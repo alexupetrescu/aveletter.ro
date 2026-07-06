@@ -26,6 +26,25 @@ class ProductCategory(models.Model):
         return self.name
 
 
+class ProductCategoryAssignment(models.Model):
+    product = models.ForeignKey(
+        "Product", on_delete=models.CASCADE, related_name="category_assignments",
+    )
+    category = models.ForeignKey(
+        ProductCategory, on_delete=models.CASCADE, related_name="product_assignments",
+    )
+    is_primary = models.BooleanField(default=False)
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-is_primary", "sort_order"]
+        unique_together = [("product", "category")]
+
+    def __str__(self):
+        flag = " (primary)" if self.is_primary else ""
+        return f"{self.product.title} → {self.category.name}{flag}"
+
+
 class Product(Publishable):
     class ProductType(models.TextChoices):
         STANDARD = "standard", "Standard product"
@@ -37,9 +56,11 @@ class Product(Publishable):
     product_type = models.CharField(
         max_length=30, choices=ProductType.choices, default=ProductType.STANDARD,
     )
-    category = models.ForeignKey(
-        ProductCategory, null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="products",
+    categories = models.ManyToManyField(
+        ProductCategory,
+        through="ProductCategoryAssignment",
+        blank=True,
+        related_name="products",
     )
     short_description = models.TextField(blank=True)
     description = models.JSONField(default=dict, blank=True)
@@ -102,6 +123,51 @@ class Product(Publishable):
 
     def __str__(self):
         return self.title
+
+    @property
+    def primary_category(self):
+        assignments = list(self.category_assignments.all())
+        if not assignments:
+            return None
+        primary = next((a for a in assignments if a.is_primary), None)
+        return (primary or assignments[0]).category
+
+    def set_categories(self, category_ids, primary_category_id=None):
+        """Replace category assignments; first id is primary when omitted."""
+        category_ids = list(dict.fromkeys(category_ids))
+        if not category_ids:
+            self.category_assignments.all().delete()
+            return
+
+        if primary_category_id is None or primary_category_id not in category_ids:
+            primary_category_id = category_ids[0]
+
+        existing = {
+            a.category_id: a
+            for a in self.category_assignments.all()
+        }
+        keep_ids = set(category_ids)
+        self.category_assignments.exclude(category_id__in=keep_ids).delete()
+
+        for order, cat_id in enumerate(category_ids):
+            is_primary = cat_id == primary_category_id
+            assignment = existing.get(cat_id)
+            if assignment:
+                changed = (
+                    assignment.is_primary != is_primary
+                    or assignment.sort_order != order
+                )
+                if changed:
+                    assignment.is_primary = is_primary
+                    assignment.sort_order = order
+                    assignment.save(update_fields=["is_primary", "sort_order"])
+            else:
+                ProductCategoryAssignment.objects.create(
+                    product=self,
+                    category_id=cat_id,
+                    is_primary=is_primary,
+                    sort_order=order,
+                )
 
     def save(self, *args, **kwargs):
         if self.sku == "":

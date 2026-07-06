@@ -80,6 +80,11 @@ export default async function ProductPage({
     throw err;
   }
 
+  const primaryCategory =
+    product.categories?.find((c) => c.is_primary) ??
+    product.categories?.[0] ??
+    product.category;
+
   return (
     <div>
       {/* BREADCRUMB */}
@@ -88,12 +93,12 @@ export default async function ProductPage({
           Prima pagină
         </Link>
         <span>/</span>
-        {product.category ? (
+        {primaryCategory ? (
           <Link
-            href={`/shop?categorie=${product.category.slug}`}
+            href={`/shop?categorie=${primaryCategory.slug}`}
             className="avelink text-stone"
           >
-            {product.category.name}
+            {primaryCategory.name}
           </Link>
         ) : (
           <Link href="/shop" className="avelink text-stone">

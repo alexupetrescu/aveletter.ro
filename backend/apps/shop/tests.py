@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 from .models import (
     Product,
     ProductCategory,
+    ProductCategoryAssignment,
     ProductInputField,
     ProductOption,
     ProductOptionGroup,
@@ -23,6 +24,9 @@ from .recommendations import (
 
 
 def make_product(**kwargs):
+    category = kwargs.pop("category", None)
+    category_ids = kwargs.pop("category_ids", None)
+    primary_category_id = kwargs.pop("primary_category_id", None)
     defaults = {
         "title": "Test",
         "slug": kwargs.pop("slug", "test-product"),
@@ -31,7 +35,12 @@ def make_product(**kwargs):
         "base_price_amount": 5000,
     }
     defaults.update(kwargs)
-    return Product.objects.create(**defaults)
+    product = Product.objects.create(**defaults)
+    if category_ids is not None:
+        product.set_categories(category_ids, primary_category_id)
+    elif category is not None:
+        product.set_categories([category.pk], category.pk)
+    return product
 
 
 class CountWordsTests(TestCase):
@@ -412,6 +421,38 @@ class RecommendationTests(TestCase):
         slugs = [p["slug"] for p in response.data["cross_sells"]]
         self.assertEqual(slugs[0], "complement-product")
         self.assertIn("upsells", response.data)
+
+
+class ProductCategoryTests(TestCase):
+    def setUp(self):
+        self.cat_a = ProductCategory.objects.create(name="Invitații", slug="invitatii")
+        self.cat_b = ProductCategory.objects.create(name="Ornamente", slug="ornamente")
+        self.product = make_product(
+            slug="multi-cat",
+            category_ids=[self.cat_a.pk, self.cat_b.pk],
+            primary_category_id=self.cat_a.pk,
+        )
+
+    def test_primary_category_property(self):
+        self.assertEqual(self.product.primary_category.pk, self.cat_a.pk)
+
+    def test_list_filter_matches_any_category(self):
+        client = APIClient()
+        for slug in ("invitatii", "ornamente"):
+            response = client.get("/api/shop/products/", {"category": slug})
+            self.assertEqual(response.status_code, 200)
+            slugs = [p["slug"] for p in response.data["results"]]
+            self.assertIn("multi-cat", slugs)
+
+    def test_detail_includes_categories(self):
+        client = APIClient()
+        response = client.get(f"/api/shop/products/{self.product.slug}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["categories"]), 2)
+        self.assertEqual(response.data["category"]["slug"], "invitatii")
+        self.assertTrue(
+            any(c["slug"] == "ornamente" for c in response.data["categories"]),
+        )
 
 
 class PremadeStockTests(TestCase):

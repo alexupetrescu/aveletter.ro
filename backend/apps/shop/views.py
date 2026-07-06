@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from apps.blog.models import Post
 
+from .category_utils import categories_prefetch
 from .models import Product, ProductCategory, ProductOption, ProductVariant
 from .pricing import quote_product
 from .serializers import (
@@ -29,12 +30,16 @@ class ProductListView(generics.ListAPIView):
     serializer_class = ProductListSerializer
 
     def get_queryset(self):
-        qs = Product.objects.live().select_related("category", "featured_image")
+        qs = (
+            Product.objects.live()
+            .select_related("featured_image")
+            .prefetch_related(categories_prefetch())
+        )
         category = self.request.query_params.get("category")
         if category:
             qs = qs.filter(
-                Q(category__slug=category) | Q(category__parent__slug=category)
-            )
+                Q(categories__slug=category) | Q(categories__parent__slug=category),
+            ).distinct()
         if self.request.query_params.get("featured"):
             qs = qs.filter(is_featured=True)
         return qs
@@ -47,8 +52,9 @@ class ProductDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         return (
             Product.objects.live()
-            .select_related("category", "featured_image")
+            .select_related("featured_image")
             .prefetch_related(
+                categories_prefetch(),
                 "productimage_set__asset",
                 "variants",
                 "option_groups__options__image",
@@ -112,7 +118,8 @@ class SearchView(APIView):
 
         products = (
             Product.objects.live()
-            .select_related("category", "featured_image")
+            .select_related("featured_image")
+            .prefetch_related(categories_prefetch())
             .annotate(
                 similarity=Greatest(
                     TrigramSimilarity("title", q),

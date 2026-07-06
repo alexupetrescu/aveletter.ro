@@ -97,7 +97,6 @@ class Command(BaseCommand):
                 status=Product.Status.PUBLISHED,
                 published_at=now,
                 product_type=Product.ProductType.STANDARD,
-                category=categories["Invitații"],
                 short_description=(
                     "Invitație caligrafiată manual pe carton texturat premium, "
                     "cu plic asortat."
@@ -109,6 +108,7 @@ class Command(BaseCommand):
                 base_price_amount=7500,
                 is_featured=True,
             )
+            p.set_categories([categories["Invitații"].pk], categories["Invitații"].pk)
             ProductVariant.objects.create(
                 product=p, name="Default", sku="AVE-CARD-001",
                 track_stock=True, stock_quantity=20,
@@ -123,7 +123,6 @@ class Command(BaseCommand):
                 status=Product.Status.PUBLISHED,
                 published_at=now,
                 product_type=Product.ProductType.ORNAMENT,
-                category=categories["Ornamente"],
                 short_description=(
                     "Glob de sticlă pictat manual, personalizat cu numele dorit "
                     "în caligrafie."
@@ -135,6 +134,7 @@ class Command(BaseCommand):
                 base_price_amount=4500,
                 is_featured=True,
             )
+            p.set_categories([categories["Ornamente"].pk], categories["Ornamente"].pk)
             ProductVariant.objects.create(product=p, name="Default", sku="AVE-ORN-001")
             ProductInputField.objects.create(
                 product=p, key="words", label="Cuvintele dorite",
@@ -181,7 +181,6 @@ class Command(BaseCommand):
                 status=Product.Status.PUBLISHED,
                 published_at=now,
                 product_type=Product.ProductType.TEXT_BY_PAGE,
-                category=categories["Jurăminte"],
                 short_description=(
                     "Jurămintele voastre, scrise de mână pe hârtie premium. "
                     "Preț calculat pe pagină."
@@ -194,6 +193,7 @@ class Command(BaseCommand):
                 base_price_amount=0,
                 is_featured=True,
             )
+            p.set_categories([categories["Jurăminte"].pk], categories["Jurăminte"].pk)
             ProductVariant.objects.create(product=p, name="Default", sku="AVE-VOW-001")
             ProductInputField.objects.create(
                 product=p, key="message_text", label="Textul jurămintelor",

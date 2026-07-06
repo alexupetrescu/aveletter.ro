@@ -3,6 +3,7 @@ from django.contrib import admin
 from .models import (
     Product,
     ProductCategory,
+    ProductCategoryAssignment,
     ProductImage,
     ProductInputField,
     ProductOption,
@@ -16,7 +17,14 @@ from .models import (
 class ProductCategoryAdmin(admin.ModelAdmin):
     list_display = ["name", "slug", "parent", "sort_order"]
     list_filter = ["parent"]
+    search_fields = ["name", "slug"]
     prepopulated_fields = {"slug": ("name",)}
+
+
+class ProductCategoryAssignmentInline(admin.TabularInline):
+    model = ProductCategoryAssignment
+    extra = 0
+    autocomplete_fields = ["category"]
 
 
 class ProductImageInline(admin.TabularInline):
@@ -52,20 +60,26 @@ class TextByPagePricingInline(admin.StackedInline):
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = [
-        "title", "product_type", "category", "status",
+        "title", "product_type", "primary_category_display", "status",
         "base_price_display", "is_featured",
     ]
-    list_filter = ["status", "product_type", "category", "is_featured"]
+    list_filter = ["status", "product_type", "categories", "is_featured"]
     search_fields = ["title", "short_description", "description_text"]
     prepopulated_fields = {"slug": ("title",)}
     readonly_fields = ["created_at", "updated_at"]
     inlines = [
+        ProductCategoryAssignmentInline,
         ProductImageInline,
         ProductVariantInline,
         ProductInputFieldInline,
         ProductOptionGroupInline,
         TextByPagePricingInline,
     ]
+
+    @admin.display(description="Primary category")
+    def primary_category_display(self, obj):
+        primary = obj.primary_category
+        return primary.name if primary else "—"
 
     @admin.display(description="Base price")
     def base_price_display(self, obj):

@@ -26,6 +26,75 @@ function countWords(text: string): number {
   return matches?.length ?? 0;
 }
 
+function truncateToMaxWords(text: string, maxWords: number): string {
+  if (countWords(text) <= maxWords) return text;
+  let end = text.length;
+  while (end > 0 && countWords(text.slice(0, end)) > maxWords) {
+    end--;
+  }
+  return text.slice(0, end);
+}
+
+function fieldMaxLimitMessage(
+  field: ProductInputField,
+  kind: "chars" | "words",
+): string {
+  if (kind === "chars" && field.max_chars !== null) {
+    return `„${field.label}" trebuie să aibă cel mult ${field.max_chars} caractere.`;
+  }
+  if (kind === "words" && field.max_words !== null) {
+    return `„${field.label}" trebuie să aibă cel mult ${field.max_words} cuvinte.`;
+  }
+  return "";
+}
+
+function applyFieldLimits(
+  text: string,
+  field: ProductInputField,
+): { value: string; limitError: string | null } {
+  let value = text;
+  let limitError: string | null = null;
+
+  if (field.max_words !== null && countWords(text) > field.max_words) {
+    limitError = fieldMaxLimitMessage(field, "words");
+    value = truncateToMaxWords(text, field.max_words);
+  } else if (field.max_chars !== null && text.length > field.max_chars) {
+    limitError = fieldMaxLimitMessage(field, "chars");
+    value = text.slice(0, field.max_chars);
+  }
+
+  if (field.max_chars !== null && value.length > field.max_chars) {
+    value = value.slice(0, field.max_chars);
+  }
+
+  return { value, limitError };
+}
+
+function wouldExceedFieldLimits(
+  current: string,
+  addition: string,
+  field: ProductInputField,
+): "chars" | "words" | null {
+  const next = current + addition;
+  if (field.max_chars !== null && next.length > field.max_chars) return "chars";
+  if (field.max_words !== null && countWords(next) > field.max_words) return "words";
+  return null;
+}
+
+const LIMIT_BLOCKING_KEYS = new Set([
+  "Backspace",
+  "Delete",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+  "Tab",
+  "Enter",
+  "Home",
+  "End",
+  "Escape",
+]);
+
 function missingFieldMessage(
   field: ProductInputField,
   product: ProductDetail,
@@ -140,12 +209,44 @@ function InputFieldControl({
   onChange: (value: unknown) => void;
   onFileChange: (file: File | null) => void;
 }) {
+  const [limitError, setLimitError] = useState<string | null>(null);
+  const textValue = String(value ?? "");
+  const hasLimits = field.max_chars !== null || field.max_words !== null;
+
+  const handleTextChange = (next: string) => {
+    if (!hasLimits) {
+      setLimitError(null);
+      onChange(next);
+      return;
+    }
+    const { value: clamped, limitError: err } = applyFieldLimits(next, field);
+    setLimitError(err);
+    onChange(clamped);
+  };
+
+  const handleTextKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (!hasLimits || e.ctrlKey || e.metaKey || e.altKey || e.nativeEvent.isComposing) return;
+    if (LIMIT_BLOCKING_KEYS.has(e.key)) return;
+    if (e.key.length !== 1) return;
+
+    const exceeded = wouldExceedFieldLimits(textValue, e.key, field);
+    if (exceeded) {
+      e.preventDefault();
+      setLimitError(fieldMaxLimitMessage(field, exceeded));
+    }
+  };
+
+  const limitHint = limitError && (
+    <p className="mt-1.5 text-xs text-[#a03030]">{limitError}</p>
+  );
+
   const mandatory = isMandatoryField(field, product);
   const label = (
     <label className="mb-2.5 block text-[11px] tracking-[1.5px] text-muted uppercase">
       {field.label}
       {field.min_words ? ` (min. ${field.min_words} cuvinte)` : ""}
       {field.max_words ? ` (max. ${field.max_words} cuvinte)` : ""}
+      {field.max_chars ? ` (max. ${field.max_chars} caractere)` : ""}
       {mandatory ? " *" : ""}
     </label>
   );
@@ -159,16 +260,18 @@ function InputFieldControl({
         <div>
           {label}
           <textarea
-            value={(value as string) ?? ""}
-            onChange={(e) => onChange(e.target.value)}
+            value={textValue}
+            onChange={(e) => handleTextChange(e.target.value)}
+            onKeyDown={handleTextKeyDown}
             placeholder={field.placeholder}
             rows={7}
             required={mandatory}
             className="w-full border border-ink/18 bg-transparent p-4 font-serif text-[17px] leading-[1.8] italic outline-none focus:border-ink"
           />
-          {field.help_text && (
+          {field.help_text && !limitError && (
             <p className="mt-1.5 text-xs text-stone">{field.help_text}</p>
           )}
+          {limitHint}
         </div>
       );
     case "boolean":
@@ -207,12 +310,14 @@ function InputFieldControl({
           {label}
           <input
             type={field.field_type === "number" ? "number" : field.field_type}
-            value={(value as string) ?? ""}
-            onChange={(e) => onChange(e.target.value)}
+            value={textValue}
+            onChange={(e) => handleTextChange(e.target.value)}
+            onKeyDown={handleTextKeyDown}
             placeholder={field.placeholder}
             required={mandatory}
             className={underlineInput}
           />
+          {limitHint}
         </div>
       );
     default:
@@ -220,15 +325,17 @@ function InputFieldControl({
         <div>
           {label}
           <input
-            value={(value as string) ?? ""}
-            onChange={(e) => onChange(e.target.value)}
+            value={textValue}
+            onChange={(e) => handleTextChange(e.target.value)}
+            onKeyDown={handleTextKeyDown}
             placeholder={field.placeholder}
             required={mandatory}
             className={underlineInput}
           />
-          {field.help_text && (
+          {field.help_text && !limitError && (
             <p className="mt-1.5 text-xs text-stone">{field.help_text}</p>
           )}
+          {limitHint}
         </div>
       );
   }
@@ -284,6 +391,21 @@ export default function ProductConfigurator({
     }
     return data;
   }, [inputs, product.input_fields]);
+
+  const productCategories = useMemo(() => {
+    if (product.categories?.length) return product.categories;
+    return product.category ? [product.category] : [];
+  }, [product.categories, product.category]);
+
+  const primaryCategory = useMemo(
+    () => productCategories.find((c) => c.is_primary) ?? productCategories[0] ?? null,
+    [productCategories],
+  );
+
+  const categoryLabel = useMemo(
+    () => productCategories.map((c) => c.name).join(", "),
+    [productCategories],
+  );
 
   const validationErrors = useMemo(
     () =>
@@ -489,31 +611,29 @@ export default function ProductConfigurator({
             label={`foto principală: ${product.title}`}
           />
         )}
-        <div className="grid grid-cols-3 gap-4">
-          {gallery.length > 1
-            ? gallery.map((asset, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={i}
-                  src={asset.url}
-                  alt={asset.alt_text}
-                  onClick={() => setActiveImage(i)}
-                  className={`aspect-square w-full cursor-pointer object-cover ${
-                    i === activeImage ? "outline outline-ink" : ""
-                  }`}
-                />
-              ))
-            : [1, 2, 3].map((n) => (
-                <PhotoBox key={n} aspect="1/1" label={`foto ${n}`} />
-              ))}
-        </div>
+        {gallery.length > 1 && (
+          <div className="grid grid-cols-3 gap-4">
+            {gallery.map((asset, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={asset.url}
+                alt={asset.alt_text}
+                onClick={() => setActiveImage(i)}
+                className={`aspect-square w-full cursor-pointer object-cover ${
+                  i === activeImage ? "outline outline-ink" : ""
+                }`}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* INFO + CONFIG */}
       <div>
-        {product.category && (
+        {primaryCategory && (
           <div className="mb-3.5 text-[11px] tracking-[2px] text-olive uppercase">
-            {product.category.name}
+            {primaryCategory.name}
           </div>
         )}
         <h1 className="mb-5 font-serif text-[30px] leading-[1.2] font-medium lg:text-[38px]">
@@ -767,7 +887,7 @@ export default function ProductConfigurator({
             Timp de producție: {product.production_time_min_days}–
             {product.production_time_max_days} zile lucrătoare
           </div>
-          {product.category && <div>Categorie: {product.category.name}</div>}
+          {categoryLabel && <div>Categorii: {categoryLabel}</div>}
           <div>Lucrat manual, în atelier</div>
         </div>
       </div>

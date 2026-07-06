@@ -17,7 +17,14 @@ export default function ShopIndex({
 
   // Only show category tabs that actually contain products.
   const usedSlugs = useMemo(
-    () => new Set(products.map((p) => p.category?.slug).filter(Boolean)),
+    () =>
+      new Set(
+        products.flatMap((p) =>
+          (p.categories?.length ? p.categories : p.category ? [p.category] : [])
+            .map((c) => c.slug)
+            .filter(Boolean),
+        ),
+      ),
     [products],
   );
   const tabs = categories.filter(
@@ -25,7 +32,12 @@ export default function ShopIndex({
   );
 
   const visible = active
-    ? products.filter((p) => p.category?.slug === active)
+    ? products.filter((p) => {
+        const slugs = (
+          p.categories?.length ? p.categories : p.category ? [p.category] : []
+        ).map((c) => c.slug);
+        return slugs.includes(active);
+      })
     : products;
 
   return (

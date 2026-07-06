@@ -20,6 +20,7 @@ export interface Category {
 export interface ProductCategoryRef {
   name: string;
   slug: string;
+  is_primary?: boolean;
 }
 
 export interface ProductAvailability {
@@ -34,6 +35,7 @@ export interface ProductListItem {
   slug: string;
   product_type: "standard" | "text_by_page" | "ornament" | "custom_quote" | "premade";
   category: ProductCategoryRef | null;
+  categories: ProductCategoryRef[];
   short_description: string;
   featured_image: AssetData | null;
   base_price_amount: number;
