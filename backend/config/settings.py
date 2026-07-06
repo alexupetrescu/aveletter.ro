@@ -131,4 +131,21 @@ STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY", default="")
 STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default="")
 STRIPE_PUBLISHABLE_KEY = env("STRIPE_PUBLISHABLE_KEY", default="")
 
+# Email (SMTP) — mail.avestudio.ro:587 STARTTLS, IMAP :993 SSL
+EMAIL_BACKEND = env(
+    "EMAIL_BACKEND",
+    default="django.core.mail.backends.smtp.EmailBackend",
+)
+EMAIL_HOST = env("EMAIL_HOST", default="mail.avestudio.ro")
+EMAIL_PORT = env.int("EMAIL_PORT", default=587)
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
+EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="adinapetrescu@avestudio.ro")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+DEFAULT_FROM_EMAIL = env(
+    "DEFAULT_FROM_EMAIL",
+    default="Ave Letter <adinapetrescu@avestudio.ro>",
+)
+SERVER_EMAIL = env("SERVER_EMAIL", default=EMAIL_HOST_USER)
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

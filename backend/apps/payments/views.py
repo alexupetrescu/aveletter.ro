@@ -3,11 +3,13 @@ import logging
 import stripe
 from django.conf import settings
 from django.db import transaction
+from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.orders.models import Cart, Order
+from apps.orders.emails import send_order_confirmation_email
 from apps.orders.serializers import AddressSerializer
 from apps.orders.services import CheckoutError, create_order_from_cart, mark_order_paid
 from apps.orders.views import _cart_key
@@ -16,6 +18,31 @@ from .models import Payment
 from .services import create_checkout_session
 
 logger = logging.getLogger(__name__)
+
+
+def _stripe_checkout_response(order: Order, session) -> dict:
+    return {
+        "order_number": order.order_number,
+        "payment_method": "stripe",
+        "checkout_url": session.url,
+        "subtotal_amount": order.subtotal_amount,
+        "shipping_amount": order.shipping_amount,
+        "total_amount": order.total_amount,
+    }
+
+
+def _start_stripe_payment(order: Order):
+    """Create a Stripe Checkout Session and pending Payment for an order."""
+    session = create_checkout_session(order)
+    Payment.objects.create(
+        order=order,
+        provider=Payment.Provider.STRIPE,
+        status=Payment.Status.PENDING,
+        amount=order.total_amount,
+        currency=order.currency,
+        stripe_checkout_session_id=session.id,
+    )
+    return session
 
 
 class CheckoutStartView(APIView):
@@ -88,6 +115,13 @@ class CheckoutStartView(APIView):
                 amount=order.total_amount,
                 currency=order.currency,
             )
+            try:
+                send_order_confirmation_email(order, payment_method="ramburs")
+            except Exception:
+                logger.exception(
+                    "Failed to send order confirmation email for %s",
+                    order.order_number,
+                )
             success_url = (
                 f"{settings.FRONTEND_URL}/checkout/success"
                 f"?order={order.order_number}&payment=ramburs"
@@ -102,7 +136,7 @@ class CheckoutStartView(APIView):
             })
 
         try:
-            session = create_checkout_session(order)
+            session = _start_stripe_payment(order)
         except stripe.error.StripeError:
             logger.exception("Stripe session creation failed for %s", order.order_number)
             return Response(
@@ -110,23 +144,62 @@ class CheckoutStartView(APIView):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        Payment.objects.create(
+        return Response(_stripe_checkout_response(order, session))
+
+
+class CheckoutResumeView(APIView):
+    """Create a new Stripe Checkout Session for an unpaid order."""
+
+    def post(self, request):
+        order_number = (request.data.get("order_number") or "").strip()
+        if not order_number:
+            return Response(
+                {"errors": ["Numărul comenzii este obligatoriu."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        order = get_object_or_404(
+            Order.objects.prefetch_related("lines"),
+            order_number=order_number,
+        )
+
+        if order.status != Order.Status.PENDING_PAYMENT:
+            return Response(
+                {"errors": ["Comanda nu mai poate fi plătită online."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not order.lines.exists():
+            return Response(
+                {"errors": ["Comanda nu conține produse."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if order.payments.filter(
+            provider=Payment.Provider.STRIPE,
+            status=Payment.Status.SUCCEEDED,
+        ).exists():
+            return Response(
+                {"errors": ["Comanda a fost deja plătită."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        Payment.objects.filter(
             order=order,
             provider=Payment.Provider.STRIPE,
             status=Payment.Status.PENDING,
-            amount=order.total_amount,
-            currency=order.currency,
-            stripe_checkout_session_id=session.id,
-        )
+        ).update(status=Payment.Status.CANCELLED)
 
-        return Response({
-            "order_number": order.order_number,
-            "payment_method": "stripe",
-            "checkout_url": session.url,
-            "subtotal_amount": order.subtotal_amount,
-            "shipping_amount": order.shipping_amount,
-            "total_amount": order.total_amount,
-        })
+        try:
+            session = _start_stripe_payment(order)
+        except stripe.error.StripeError:
+            logger.exception("Stripe resume failed for %s", order.order_number)
+            return Response(
+                {"errors": ["Eroare la procesatorul de plăți. Încearcă din nou."]},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(_stripe_checkout_response(order, session))
 
 
 class StripeWebhookView(APIView):
@@ -163,6 +236,18 @@ class StripeWebhookView(APIView):
         if payment.last_event_id == event["id"]:
             return
         if payment.status == Payment.Status.SUCCEEDED:
+            return
+        if payment.status == Payment.Status.CANCELLED:
+            logger.info(
+                "Ignoring webhook for cancelled session %s (order %s)",
+                session["id"], payment.order.order_number,
+            )
+            return
+        if payment.order.status != Order.Status.PENDING_PAYMENT:
+            logger.info(
+                "Ignoring webhook for order %s in status %s",
+                payment.order.order_number, payment.order.status,
+            )
             return
 
         payment.status = Payment.Status.SUCCEEDED

@@ -454,6 +454,15 @@ export function startCheckout(
   });
 }
 
+export function resumeCheckout(
+  orderNumber: string,
+): Promise<CheckoutStartResponse> {
+  return request<CheckoutStartResponse>("/api/checkout/resume/", {
+    method: "POST",
+    body: JSON.stringify({ order_number: orderNumber }),
+  });
+}
+
 export function getOrder(orderNumber: string): Promise<OrderData> {
   return request<OrderData>(`/api/orders/${orderNumber}/`, {
     cache: "no-store",

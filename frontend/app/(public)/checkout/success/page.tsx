@@ -1,13 +1,15 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import FilledLink from "@/components/FilledLink";
+import ResumePaymentButton from "@/components/ResumePaymentButton";
 import type { OrderData } from "@/lib/api";
 import { getOrder } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { formatBani } from "@/lib/money";
+
+const MAX_POLL_ATTEMPTS = 5;
 
 function SuccessContent() {
   const params = useSearchParams();
@@ -16,6 +18,7 @@ function SuccessContent() {
   const { resetAfterCheckout } = useCart();
   const [order, setOrder] = useState<OrderData | null>(null);
   const [notFoundOrder, setNotFoundOrder] = useState(false);
+  const [pollingExhausted, setPollingExhausted] = useState(false);
 
   useEffect(() => {
     resetAfterCheckout();
@@ -31,10 +34,18 @@ function SuccessContent() {
         if (
           !isRamburs &&
           data.status === "pending_payment" &&
-          attempts < 5
+          attempts < MAX_POLL_ATTEMPTS
         ) {
           attempts += 1;
           setTimeout(poll, 2000);
+          return;
+        }
+        if (
+          !isRamburs &&
+          data.status === "pending_payment" &&
+          attempts >= MAX_POLL_ATTEMPTS
+        ) {
+          setPollingExhausted(true);
         }
       } catch {
         if (!cancelled) setNotFoundOrder(true);
@@ -51,6 +62,12 @@ function SuccessContent() {
     order?.status &&
     order.status !== "pending_payment" &&
     order.status !== "draft";
+
+  const showResume =
+    !isRamburs &&
+    pollingExhausted &&
+    order?.status === "pending_payment" &&
+    orderNumber;
 
   return (
     <div className="mx-auto max-w-[700px] px-6 pt-[84px] pb-32 text-center lg:px-12">
@@ -78,7 +95,9 @@ function SuccessContent() {
               ? "Plata se face ramburs, la livrare. Vei primi detaliile pe email, iar atelierul se apucă de lucru după confirmare."
               : paid
                 ? "Plata a fost confirmată. Vei primi detaliile pe email, iar atelierul se apucă de lucru."
-                : "Așteptăm confirmarea plății de la procesator. Vei primi un email imediat ce plata este confirmată."}
+                : showResume
+                  ? "Plata nu a fost confirmată încă. Poți reîncerca plata sau aștepta — vei primi un email imediat ce plata este confirmată."
+                  : "Așteptăm confirmarea plății de la procesator. Vei primi un email imediat ce plata este confirmată."}
           </p>
           <div className="mx-auto mb-10 max-w-[420px] border border-ink/10 p-6 text-left">
             {order.lines.map((line, i) => (
@@ -105,6 +124,9 @@ function SuccessContent() {
               <span>{formatBani(order.total_amount, order.currency)}</span>
             </div>
           </div>
+          {showResume && (
+            <ResumePaymentButton orderNumber={orderNumber} className="mb-8" />
+          )}
         </>
       ) : (
         <p className="mb-8 text-[14.5px] text-muted">Se încarcă…</p>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirmare comandă {{ order.order_number }}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f7f5f0;font-family:Georgia,'Times New Roman',serif;color:#2c2c2c;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f7f5f0;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background-color:#ffffff;border:1px solid #e8e4dc;">
+          <tr>
+            <td style="padding:32px 32px 16px;text-align:center;border-bottom:1px solid #e8e4dc;">
+              <p style="margin:0 0 8px;font-family:Georgia,serif;font-size:22px;color:#6b705c;font-style:italic;">mulțumim</p>
+              <h1 style="margin:0;font-size:26px;font-weight:500;color:#2c2c2c;">Confirmare comandă</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 32px;">
+              <p style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.7;color:#555;">
+                Bună{% if shipping_address %}, {{ shipping_address.full_name }}{% endif %}!<br>
+                Comanda ta a fost înregistrată la <strong>Ave Letter</strong>.
+              </p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:24px;font-family:Arial,Helvetica,sans-serif;font-size:14px;">
+                <tr>
+                  <td style="padding:8px 0;color:#777;">Număr comandă</td>
+                  <td style="padding:8px 0;text-align:right;font-weight:600;color:#2c2c2c;">{{ order.order_number }}</td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 0;color:#777;">Data</td>
+                  <td style="padding:8px 0;text-align:right;color:#2c2c2c;">{{ order.placed_at|date:"j F Y, H:i" }}</td>
+                </tr>
+                {% if payment_note %}
+                <tr>
+                  <td colspan="2" style="padding:12px 0 0;color:#6b705c;font-style:italic;">{{ payment_note }}</td>
+                </tr>
+                {% endif %}
+              </table>
+
+              <h2 style="margin:0 0 12px;font-size:16px;font-weight:600;color:#2c2c2c;font-family:Arial,Helvetica,sans-serif;">Produse</h2>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:14px;margin-bottom:24px;">
+                <thead>
+                  <tr style="background-color:#f7f5f0;">
+                    <th align="left" style="padding:10px 8px;border-bottom:1px solid #e8e4dc;color:#777;font-weight:600;">Produs</th>
+                    <th align="center" style="padding:10px 8px;border-bottom:1px solid #e8e4dc;color:#777;font-weight:600;">Cant.</th>
+                    <th align="right" style="padding:10px 8px;border-bottom:1px solid #e8e4dc;color:#777;font-weight:600;">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for line in lines %}
+                  <tr>
+                    <td style="padding:12px 8px;border-bottom:1px solid #eee;vertical-align:top;">
+                      <strong style="color:#2c2c2c;">{{ line.product_title }}</strong>
+                      {% if line.variant_name %}<br><span style="color:#777;font-size:13px;">{{ line.variant_name }}</span>{% endif %}
+                      {% for opt in line.options %}<br><span style="color:#777;font-size:12px;">{{ opt }}</span>{% endfor %}
+                      <br><span style="color:#999;font-size:12px;">{{ line.unit_price }} / buc.</span>
+                    </td>
+                    <td align="center" style="padding:12px 8px;border-bottom:1px solid #eee;vertical-align:top;">{{ line.quantity }}</td>
+                    <td align="right" style="padding:12px 8px;border-bottom:1px solid #eee;vertical-align:top;font-weight:600;">{{ line.line_total }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:24px;font-family:Arial,Helvetica,sans-serif;font-size:14px;">
+                {% for row in totals %}
+                <tr>
+                  <td style="padding:6px 0;color:{% if row.bold %}#2c2c2c{% else %}#777{% endif %};{% if row.bold %}font-weight:700;font-size:16px;{% endif %}">{{ row.label }}</td>
+                  <td align="right" style="padding:6px 0;{% if row.bold %}font-weight:700;font-size:16px;color:#2c2c2c;{% endif %}">{{ row.value }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+
+              <h2 style="margin:0 0 8px;font-size:16px;font-weight:600;color:#2c2c2c;font-family:Arial,Helvetica,sans-serif;">Adresă livrare</h2>
+              <p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#555;">
+                {% for line in shipping_lines %}{{ line }}<br>{% endfor %}
+              </p>
+
+              {% if addresses_differ %}
+              <h2 style="margin:0 0 8px;font-size:16px;font-weight:600;color:#2c2c2c;font-family:Arial,Helvetica,sans-serif;">Adresă facturare</h2>
+              <p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#555;">
+                {% for line in billing_lines %}{{ line }}<br>{% endfor %}
+              </p>
+              {% endif %}
+
+              {% if order.customer_notes %}
+              <h2 style="margin:0 0 8px;font-size:16px;font-weight:600;color:#2c2c2c;font-family:Arial,Helvetica,sans-serif;">Note</h2>
+              <p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#555;">{{ order.customer_notes }}</p>
+              {% endif %}
+
+              <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#555;">
+                Atelierul se apucă de lucru după confirmarea comenzii.<br>
+                Dacă ai întrebări, scrie-ne la
+                <a href="mailto:{{ site.contact_email|default:'adina@aveletter.ro' }}" style="color:#6b705c;">{{ site.contact_email|default:"adina@aveletter.ro" }}</a>{% if site.contact_phone %}
+                sau sună la {{ site.contact_phone }}{% endif %}.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px;text-align:center;border-top:1px solid #e8e4dc;background-color:#f7f5f0;">
+              <p style="margin:0 0 4px;font-family:Georgia,serif;font-size:18px;color:#6b705c;">Ave Letter</p>
+              <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#999;">
+                <a href="{{ site_url }}" style="color:#6b705c;text-decoration:none;">{{ site.domain }}</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

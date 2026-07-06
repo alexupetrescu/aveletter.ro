@@ -1,3 +1,5 @@
+import logging
+
 from django.core.files.base import ContentFile
 
 from django.db import IntegrityError, transaction
@@ -29,6 +31,9 @@ from .models import (
 )
 
 from .tax import compute_vat
+
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -396,17 +401,28 @@ def mark_order_paid(order: Order) -> None:
 
     """Called from the payment webhook. Idempotent."""
 
+    from .emails import send_order_confirmation_email
     from .invoicing import issue_invoice
 
 
 
-    if order.status != Order.Status.PAID:
+    became_paid = order.status != Order.Status.PAID
+
+    if became_paid:
 
         order.status = Order.Status.PAID
 
         order.paid_at = timezone.now()
 
         order.save(update_fields=["status", "paid_at"])
+
+        try:
+            send_order_confirmation_email(order, payment_method="stripe")
+        except Exception:
+            logger.exception(
+                "Failed to send order confirmation email for %s",
+                order.order_number,
+            )
 
     issue_invoice(order)
 

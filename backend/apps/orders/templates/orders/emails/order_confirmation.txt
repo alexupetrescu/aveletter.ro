@@ -1,0 +1,41 @@
+Mulțumim pentru comandă{% if shipping_address %}, {{ shipping_address.full_name }}{% endif %}!
+
+Comanda ta a fost înregistrată la Ave Letter.
+
+Număr comandă: {{ order.order_number }}
+Data: {{ order.placed_at|date:"j F Y, H:i" }}
+{% if payment_note %}{{ payment_note }}
+{% endif %}
+
+--- PRODUSE ---
+
+{% for line in lines %}{{ line.quantity }} x {{ line.product_title }}{% if line.variant_name %} ({{ line.variant_name }}){% endif %}
+  Preț unitar: {{ line.unit_price }}  |  Total linie: {{ line.line_total }}
+{% for opt in line.options %}  • {{ opt }}
+{% endfor %}
+{% endfor %}
+--- SUMAR ---
+
+{% for row in totals %}{{ row.label }}: {{ row.value }}
+{% endfor %}
+--- ADRESĂ LIVRARE ---
+
+{% for line in shipping_lines %}{{ line }}
+{% endfor %}
+{% if addresses_differ %}
+--- ADRESĂ FACTURARE ---
+
+{% for line in billing_lines %}{{ line }}
+{% endfor %}{% endif %}{% if order.customer_notes %}
+--- NOTE ---
+
+{{ order.customer_notes }}
+{% endif %}
+---
+
+Atelierul se apucă de lucru după confirmarea comenzii.
+Dacă ai întrebări, scrie-ne la {{ site.contact_email|default:"adina@aveletter.ro" }}{% if site.contact_phone %} sau sună la {{ site.contact_phone }}{% endif %}.
+
+Cu drag,
+Ave Letter
+{{ site_url }}
