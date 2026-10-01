@@ -70,11 +70,19 @@ class CartSerializer(serializers.ModelSerializer):
 
 
 class AddressSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        if attrs.get("is_company") and not (attrs.get("company_name") and attrs.get("cui")):
+            raise serializers.ValidationError("Denumirea firmei și CIF-ul sunt obligatorii.")
+        if not attrs.get("is_company"):
+            attrs.update(company_name="", cui="", reg_com="")
+        return attrs
+
     class Meta:
         model = Address
         fields = [
             "full_name", "phone", "email", "country", "county",
             "city", "postal_code", "line1", "line2",
+            "is_company", "company_name", "cui", "reg_com",
         ]
 
 
@@ -92,6 +100,15 @@ class OrderLineSerializer(serializers.ModelSerializer):
 
 
 class OrderSerializer(serializers.ModelSerializer):
+    payment_method = serializers.SerializerMethodField()
+
+    def get_payment_method(self, obj):
+        if obj.payments.filter(provider="cash").exists():
+            return "cash"
+        if obj.payments.filter(provider="bank_transfer").exists():
+            return "bank_transfer"
+        return "stripe"
+
     lines = OrderLineSerializer(many=True, read_only=True)
     billing_address = AddressSerializer(read_only=True)
     shipping_address = AddressSerializer(read_only=True)
@@ -105,6 +122,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "discount_amount", "vat_amount", "total_amount",
             "vat_enabled_snapshot", "vat_breakdown",
             "customer_notes", "placed_at", "paid_at", "lines",
+            "payment_method",
         ]
 
 

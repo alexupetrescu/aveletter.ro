@@ -14,6 +14,49 @@ export interface CrmUser {
   is_staff: boolean;
 }
 
+export interface CrmNotificationConfig {
+  staff_notifications_enabled: boolean;
+  order_recipients: string[];
+  sender_name: string;
+  reply_to: string;
+}
+
+export interface CrmEmailTemplate {
+  id: number;
+  key: string;
+  name: string;
+  enabled: boolean;
+  subject: string;
+  body: string;
+  updated_at: string;
+}
+
+export interface CrmEmail {
+  id: number;
+  template_key: string;
+  recipient: string;
+  subject: string;
+  body: string;
+  status: "pending" | "sending" | "sent" | "failed" | "skipped" | "uncertain";
+  attempts: number;
+  last_error: string;
+  sent_at: string | null;
+  created_at: string;
+  next_attempt_at: string;
+  invoice: number | null;
+  event: number | null;
+}
+
+export interface CrmOrderEvent {
+  id: number;
+  key: string;
+  from_status: string;
+  to_status: string;
+  actor_name: string;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface Paginated<T> {
   count: number;
   next: string | null;
@@ -283,6 +326,10 @@ export interface CrmAuthorProfile {
 }
 
 export interface CrmAddress {
+  is_company: boolean;
+  company_name: string;
+  cui: string;
+  reg_com: string;
   id: number;
   full_name: string;
   phone: string;
@@ -336,6 +383,8 @@ export interface CrmPayment {
 }
 
 export interface CrmInvoice {
+  due_date: string | null;
+  emails: CrmEmail[];
   id: number;
   number_display: string;
   series_code: string;
@@ -379,6 +428,14 @@ export interface CrmOrderList {
 }
 
 export interface CrmOrderDetail extends CrmOrderList {
+  awb: string;
+  courier: string;
+  tracking_url: string;
+  shipped_at: string | null;
+  invoice_error: string;
+  emails: CrmEmail[];
+  events: CrmOrderEvent[];
+  allowed_transitions: OrderStatus[];
   subtotal_net_amount: number;
   subtotal_amount: number;
   shipping_amount: number;
@@ -405,6 +462,17 @@ export interface CrmVatRate {
 }
 
 export interface CrmTaxConfig {
+  invoice_email: string;
+  invoice_phone: string;
+  iban: string;
+  bank: string;
+  swift: string;
+  share_capital: string;
+  invoice_logo: number | null;
+  invoice_logo_data: AssetSummary | null;
+  invoice_footer: string;
+  payment_term_days: number;
+  default_invoice_series: number | null;
   id: number;
   vat_enabled: boolean;
   prices_include_vat: boolean;
@@ -571,6 +639,11 @@ export async function checkProductSku(
 }
 
 export const crm = {
+  pdf: async (path: string): Promise<Blob> => {
+    const response = await fetch(`${CRM}${path}`, { credentials: "include", cache: "no-store" });
+    if (!response.ok) throw new CrmApiError(response.status, await response.json().catch(() => null));
+    return response.blob();
+  },
   get: <T>(path: string, params?: Record<string, string | number | undefined>) =>
     request<T>(withQuery(path, params)),
 

@@ -56,6 +56,21 @@ class TaxConfig(models.Model):
     cui = models.CharField(max_length=20, blank=True, help_text="CUI / CIF.")
     reg_com = models.CharField(max_length=50, blank=True, help_text="Nr. Reg. Com.")
     fiscal_address = models.TextField(blank=True)
+    invoice_email = models.EmailField(blank=True)
+    invoice_phone = models.CharField(max_length=50, blank=True)
+    iban = models.CharField(max_length=50, blank=True)
+    bank = models.CharField(max_length=100, blank=True)
+    swift = models.CharField(max_length=30, blank=True)
+    share_capital = models.CharField(max_length=100, blank=True)
+    invoice_logo = models.ForeignKey(
+        "media_library.MediaAsset", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="+",
+    )
+    invoice_footer = models.TextField(blank=True)
+    payment_term_days = models.PositiveSmallIntegerField(default=15)
+    default_invoice_series = models.ForeignKey(
+        "InvoiceSeries", null=True, blank=True, on_delete=models.PROTECT, related_name="+",
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -91,6 +106,10 @@ class TaxConfig(models.Model):
 # ---------------------------------------------------------------------------
 
 class Address(models.Model):
+    is_company = models.BooleanField(default=False)
+    company_name = models.CharField(max_length=255, blank=True)
+    cui = models.CharField(max_length=30, blank=True)
+    reg_com = models.CharField(max_length=50, blank=True)
     full_name = models.CharField(max_length=255)
     phone = models.CharField(max_length=50)
     email = models.EmailField(blank=True)
@@ -214,6 +233,11 @@ class Order(models.Model):
     )
     customer_notes = models.TextField(blank=True)
     internal_notes = models.TextField(blank=True)
+    awb = models.CharField(max_length=100, blank=True)
+    courier = models.CharField(max_length=100, blank=True)
+    tracking_url = models.URLField(blank=True)
+    shipped_at = models.DateTimeField(null=True, blank=True)
+    invoice_error = models.TextField(blank=True)
     placed_at = models.DateTimeField(null=True, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
     payment_resume_email_sent_at = models.DateTimeField(
@@ -317,6 +341,8 @@ class Invoice(models.Model):
     gross_amount = models.PositiveIntegerField()      # net + vat, in bani
     # Full immutable document snapshot (seller, buyer, lines, VAT breakdown).
     snapshot = models.JSONField(default=dict)
+    due_date = models.DateField(null=True, blank=True)
+    pdf_data = models.BinaryField(null=True, blank=True, editable=False)
     # e-Factura lifecycle
     efactura_status = models.CharField(
         max_length=20, choices=EFacturaStatus.choices, default=EFacturaStatus.NOT_SENT,
@@ -334,7 +360,87 @@ class Invoice(models.Model):
         ordering = ["-issued_at"]
 
     def __str__(self):
-        return f"{self.series.code}-{self.number:06d}"
+        return self.snapshot.get("number_display") or f"{self.series.code}-{self.number:06d}"
+
+
+class NotificationConfig(models.Model):
+    """Private settings shared by CRM and Django admin; SMTP stays in the environment."""
+
+    staff_notifications_enabled = models.BooleanField(default=True)
+    order_recipients = models.JSONField(default=list, blank=True)
+    sender_name = models.CharField(max_length=100, default="Ave Letter")
+    reply_to = models.EmailField(blank=True)
+
+    @classmethod
+    def get_solo(cls):
+        return cls.objects.get_or_create(pk=1)[0]
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=models.Q(pk=1), name="single_notification_config")]
+
+    def __str__(self):
+        return "Notificări și emailuri"
+
+
+class EmailTemplate(models.Model):
+    key = models.SlugField(unique=True)
+    name = models.CharField(max_length=100)
+    enabled = models.BooleanField(default=True)
+    subject = models.CharField(max_length=255)
+    body = models.TextField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        from .notifications import validate_template
+        validate_template(self.subject, self.body)
+
+    def __str__(self):
+        return self.name
+
+
+class OrderEvent(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="events")
+    key = models.CharField(max_length=40)
+    from_status = models.CharField(max_length=30, blank=True)
+    to_status = models.CharField(max_length=30, blank=True)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    details = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+
+
+class OutgoingEmail(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "În așteptare"
+        SENDING = "sending", "Se trimite"
+        SENT = "sent", "Trimis"
+        FAILED = "failed", "Eșuat"
+        SKIPPED = "skipped", "Omis"
+        UNCERTAIN = "uncertain", "Rezultat necunoscut"
+
+    order = models.ForeignKey(Order, null=True, blank=True, on_delete=models.CASCADE, related_name="emails")
+    event = models.ForeignKey(OrderEvent, null=True, blank=True, on_delete=models.SET_NULL, related_name="emails")
+    invoice = models.ForeignKey(Invoice, null=True, blank=True, on_delete=models.PROTECT, related_name="emails")
+    template_key = models.CharField(max_length=40)
+    idempotency_key = models.CharField(max_length=200, unique=True)
+    recipient = models.EmailField()
+    from_email = models.CharField(max_length=255)
+    reply_to = models.EmailField(blank=True)
+    subject = models.CharField(max_length=255)
+    body = models.TextField()
+    html_body = models.TextField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    attempts = models.PositiveIntegerField(default=0)
+    last_error = models.TextField(blank=True)
+    next_attempt_at = models.DateTimeField(default=timezone.now)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
 
 
 # ---------------------------------------------------------------------------

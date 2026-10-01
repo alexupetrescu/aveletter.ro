@@ -1,9 +1,9 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 
-import { CrmAddress, CrmOrderDetail, OrderStatus } from "@/lib/crm-api";
+import { CrmAddress, CrmOrderDetail } from "@/lib/crm-api";
 import { useCrmDetail, useCrmUpdate } from "@/lib/crm-hooks";
 import { formatBani } from "@/lib/money";
 import {
@@ -14,11 +14,12 @@ import {
   TextArea,
   useToast,
 } from "@/components/crm/ui";
-import {
-  NEXT_STATUSES,
-  ORDER_FLOW,
-  ORDER_STATUS_LABELS,
-} from "@/components/crm/orderStatus";
+import OrderWorkflow from "@/components/crm/OrderWorkflow";
+import InvoiceActions from "@/components/crm/InvoiceActions";
+import EmailHistory from "@/components/crm/EmailHistory";
+import BillingEditor from "@/components/crm/BillingEditor";
+import { ORDER_STATUS_LABELS } from "@/components/crm/orderStatus";
+
 
 function AddressBlock({ title, address }: { title: string; address: CrmAddress | null }) {
   return (
@@ -26,6 +27,7 @@ function AddressBlock({ title, address }: { title: string; address: CrmAddress |
       <p className="text-[11px] tracking-[0.14em] uppercase text-muted mb-1.5">{title}</p>
       {address ? (
         <p className="text-sm leading-relaxed">
+          {address.is_company && <><strong>{address.company_name}</strong><br />CIF: {address.cui}<br /></>}
           {address.full_name}
           <br />
           {address.line1}
@@ -78,27 +80,11 @@ export default function CrmOrderDetailPage({
   const { data: order, isLoading } = useCrmDetail<CrmOrderDetail>("orders", number);
   const update = useCrmUpdate<CrmOrderDetail>("orders");
 
-  const [notes, setNotes] = useState("");
-  useEffect(() => {
-    if (order) setNotes(order.internal_notes);
-  }, [order]);
+  const [notesDraft, setNotes] = useState<string | null>(null);
+  const notes = notesDraft ?? order?.internal_notes ?? "";
 
   if (isLoading || !order) {
     return <p className="text-muted text-sm">Se încarcă…</p>;
-  }
-
-  const flowIndex = ORDER_FLOW.indexOf(order.status);
-  const nextStatuses = NEXT_STATUSES[order.status] ?? [];
-
-  function transition(status: OrderStatus) {
-    update.mutate(
-      { id: number, body: { status } },
-      {
-        onSuccess: () =>
-          toast(`Comanda a trecut la „${ORDER_STATUS_LABELS[status]}".`),
-        onError: (err) => toast(err.message, "error"),
-      },
-    );
   }
 
   return (
@@ -113,47 +99,7 @@ export default function CrmOrderDetailPage({
         }
       />
 
-      {/* Status timeline + transitions */}
-      <Card className="mb-6">
-        <div className="flex flex-wrap items-center gap-1 mb-4">
-          {ORDER_FLOW.map((step, i) => (
-            <div key={step} className="flex items-center gap-1">
-              {i > 0 && <span className="w-6 h-px bg-ink/15" />}
-              <span
-                className={`px-2.5 py-1 rounded-full text-[11px] tracking-wide uppercase border ${
-                  i < flowIndex
-                    ? "border-olive/40 text-olive bg-olive/5"
-                    : i === flowIndex
-                      ? "bg-ink text-paper border-ink"
-                      : "border-ink/15 text-stone"
-                }`}
-              >
-                {ORDER_STATUS_LABELS[step]}
-              </span>
-            </div>
-          ))}
-          {(order.status === "cancelled" || order.status === "refunded") && (
-            <StatusBadge value={order.status} label={ORDER_STATUS_LABELS[order.status]} />
-          )}
-        </div>
-        {nextStatuses.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[12px] text-muted mr-1">Schimbă statusul:</span>
-            {nextStatuses.map((status) => (
-              <Button
-                key={status}
-                variant={
-                  status === "cancelled" || status === "refunded" ? "danger" : "subtle"
-                }
-                disabled={update.isPending}
-                onClick={() => transition(status)}
-              >
-                {ORDER_STATUS_LABELS[status]}
-              </Button>
-            ))}
-          </div>
-        )}
-      </Card>
+      <OrderWorkflow key={`${order.status}:${order.awb}:${order.courier}:${order.tracking_url}`} order={order} />
 
       <div className="grid lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-2 space-y-6">
@@ -271,13 +217,14 @@ export default function CrmOrderDetailPage({
                       </div>
                     </div>
                     <div className="mt-2">
-                      <SnapshotViewer label="Snapshot fiscal" data={inv.snapshot} />
+                      <InvoiceActions invoice={inv} />
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </Card>
+          <Card title="Istoric emailuri"><EmailHistory emails={order.emails} /></Card>
         </div>
 
         <div className="space-y-6">
@@ -322,6 +269,7 @@ export default function CrmOrderDetailPage({
             <div className="space-y-4">
               <AddressBlock title="Livrare" address={order.shipping_address} />
               <AddressBlock title="Facturare" address={order.billing_address} />
+              <BillingEditor key={order.billing_address?.id} order={order} />
             </div>
           </Card>
 
@@ -331,6 +279,13 @@ export default function CrmOrderDetailPage({
             </Card>
           )}
 
+          <Card title="Istoric etape">
+            {!order.events.length && <p className="text-sm text-muted">Nu exist? evenimente ?nregistrate.</p>}
+            <div className="space-y-3">{order.events.map((event) => <div key={event.id} className="border-b border-ink/10 pb-2 text-sm">
+              <p>{ORDER_STATUS_LABELS[event.key as keyof typeof ORDER_STATUS_LABELS] ?? ({ placed: "Comand? plasat?", shipping_updated: "Date expediere actualizate", billing_updated: "Facturare actualizat?" }[event.key] ?? event.key)}</p>
+              <p className="text-xs text-muted">{new Date(event.created_at).toLocaleString("ro-RO")} ? {event.actor_name}</p>
+            </div>)}</div>
+          </Card>
           <Card title="Note interne">
             <TextArea
               rows={4}

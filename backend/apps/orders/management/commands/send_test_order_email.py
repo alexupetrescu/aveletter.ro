@@ -1,6 +1,8 @@
+import uuid
+
 from django.core.management.base import BaseCommand, CommandError
 
-from apps.orders.emails import send_order_confirmation_email
+from apps.orders.notifications import queue_email
 from apps.orders.models import Order
 
 
@@ -18,15 +20,15 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         order_number = options["order_number"]
-        payment_method = options["payment_method"]
 
         order = Order.objects.filter(order_number=order_number).first()
         if order is None:
             raise CommandError(f"Order not found: {order_number}")
 
-        send_order_confirmation_email(order, payment_method=payment_method)
+        queue_email("placed", order=order, recipient=order.email, send=True,
+                    idempotency_key=f"test-order:{uuid.uuid4()}")
         self.stdout.write(
             self.style.SUCCESS(
-                f"Sent confirmation email for {order_number} to {order.email}",
+                f"Queued confirmation email for {order_number} to {order.email}; run process_email_queue to deliver it.",
             ),
         )

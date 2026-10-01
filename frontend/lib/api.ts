@@ -217,6 +217,7 @@ export interface CartData {
 }
 
 export interface OrderData {
+  payment_method: "stripe" | "cash" | "bank_transfer";
   order_number: string;
   email: string;
   status: string;
@@ -415,6 +416,10 @@ export function uploadCartItemFile(
 // ---- Checkout / orders ----
 
 export interface AddressInput {
+  is_company?: boolean;
+  company_name?: string;
+  cui?: string;
+  reg_com?: string;
   full_name: string;
   phone: string;
   email?: string;

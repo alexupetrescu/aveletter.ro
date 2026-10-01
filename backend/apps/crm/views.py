@@ -1,4 +1,6 @@
 from django.contrib.auth import get_user_model
+from django.db import transaction
+from .communication_views import OrderWorkflowActions, InvoiceActions
 from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 from rest_framework import mixins, viewsets
@@ -349,18 +351,18 @@ class MediaTagViewSet(CrmViewSet):
 # ---------------------------------------------------------------------------
 
 class OrderViewSet(
+    OrderWorkflowActions,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.UpdateModelMixin,
     viewsets.GenericViewSet,
 ):
-    """Orders are frozen; only status and internal notes can change."""
+    """Frozen order totals, with audited fulfillment and billing actions."""
 
     authentication_classes = CRM_AUTHENTICATION
     permission_classes = [IsStaff]
     queryset = Order.objects.order_by("-created_at")
     lookup_field = "order_number"
-    ALLOWED_UPDATE_FIELDS = {"status", "internal_notes"}
 
     def get_queryset(self):
         qs = self.queryset
@@ -376,7 +378,7 @@ class OrderViewSet(
             )
         if self.action != "list":
             qs = qs.select_related("billing_address", "shipping_address").prefetch_related(
-                "lines", "payments", "invoices__series",
+                "lines", "payments", "invoices__series", "invoices__emails", "emails", "events__actor",
             )
         return qs
 
@@ -385,26 +387,23 @@ class OrderViewSet(
             return s.OrderCrmListSerializer
         return s.OrderCrmDetailSerializer
 
-    def update(self, request, *args, **kwargs):
-        disallowed = set(request.data.keys()) - self.ALLOWED_UPDATE_FIELDS
-        if disallowed:
-            return Response(
-                {"errors": [f"Only {sorted(self.ALLOWED_UPDATE_FIELDS)} can be changed."]},
-                status=400,
-            )
-        if "status" in request.data:
-            valid = {c[0] for c in Order.Status.choices}
-            if request.data["status"] not in valid:
-                return Response({"errors": ["Invalid status."]}, status=400)
-        kwargs["partial"] = True
-        return super().update(request, *args, **kwargs)
 
 
-class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
+class InvoiceViewSet(InvoiceActions, viewsets.ReadOnlyModelViewSet):
     authentication_classes = CRM_AUTHENTICATION
     permission_classes = [IsStaff]
-    queryset = Invoice.objects.select_related("series", "order").order_by("-issued_at")
+    queryset = Invoice.objects.select_related("series", "order").defer("pdf_data").prefetch_related("emails").order_by("-issued_at")
     serializer_class = s.InvoiceCrmSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        search = self.request.query_params.get("search", "").strip()
+        if search:
+            query = Q(order__order_number__icontains=search) | Q(order__email__icontains=search) | Q(series__code__icontains=search)
+            if search.isdigit():
+                query |= Q(number=int(search))
+            qs = qs.filter(query)
+        return qs
 
 
 class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
@@ -428,6 +427,11 @@ class VatRateViewSet(CrmViewSet):
 
 
 class InvoiceSeriesViewSet(CrmViewSet):
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        self.queryset = InvoiceSeries.objects.select_for_update()
+        return super().update(request, *args, **kwargs)
+
     queryset = InvoiceSeries.objects.all()
     serializer_class = s.InvoiceSeriesCrmSerializer
     pagination_class = None
@@ -513,7 +517,7 @@ class StatsView(APIView):
             Order.Status.COMPLETED,
         ]
         revenue_total = (
-            Order.objects.filter(status__in=paid_like)
+            Order.objects.filter(status__in=paid_like, paid_at__isnull=False)
             .aggregate(v=Sum("total_amount"))["v"] or 0
         )
         revenue_month = (

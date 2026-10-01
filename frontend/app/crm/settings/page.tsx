@@ -32,6 +32,8 @@ import {
   useToast,
 } from "@/components/crm/ui";
 import MediaPicker, { MediaThumb } from "@/components/crm/MediaPicker";
+import CommunicationSettings from "@/components/crm/CommunicationSettings";
+import InvoiceSettings from "@/components/crm/InvoiceSettings";
 
 function SiteConfigPanel() {
   const toast = useToast();
@@ -703,9 +705,11 @@ export default function CrmSettingsPage() {
         </div>
         <div className="space-y-6">
           <TaxPanel />
+          <InvoiceSettings />
           <VatRatesPanel />
         </div>
       </div>
+      <div className="mt-6"><CommunicationSettings /></div>
     </div>
   );
 }

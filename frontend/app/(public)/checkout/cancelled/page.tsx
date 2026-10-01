@@ -26,7 +26,7 @@ function CancelledContent() {
         if (!cancelled) setOrder(data);
         if (
           !cancelled &&
-          data.status === "pending_payment"
+          data.status === "pending_payment" && data.payment_method === "stripe"
         ) {
           notifyCheckoutCancelled(orderNumber!).catch(() => null);
         }
@@ -42,11 +42,9 @@ function CancelledContent() {
     };
   }, [orderNumber]);
 
-  const pending = order?.status === "pending_payment";
-  const paid =
-    order?.status &&
-    order.status !== "pending_payment" &&
-    order.status !== "draft";
+  const isRamburs = order?.payment_method === "cash";
+  const pending = order?.status === "pending_payment" && order.payment_method === "stripe";
+  const paid = Boolean(order?.paid_at) && order?.status !== "refunded";
 
   return (
     <div className="mx-auto max-w-[700px] px-6 pt-[84px] pb-32 text-center lg:px-12">
@@ -66,6 +64,8 @@ function CancelledContent() {
           <span className="font-medium text-ink">{order.order_number}</span>{" "}
           a fost deja plătită.
         </p>
+      ) : isRamburs ? (
+        <p className="mb-8 text-sm text-muted">Plata se face ramburs, la livrare.</p>
       ) : pending && order ? (
         <>
           <p className="mb-2 text-[14.5px] leading-[1.8] text-muted">

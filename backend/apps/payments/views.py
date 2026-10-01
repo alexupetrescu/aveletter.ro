@@ -4,7 +4,7 @@ import stripe
 from django.conf import settings
 from django.db import transaction
 from django.shortcuts import get_object_or_404
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -44,6 +44,7 @@ def _start_stripe_payment(order: Order, *, request=None):
         currency=order.currency,
         stripe_checkout_session_id=session.id,
     )
+    send_order_confirmation_email(order, payment_method="stripe")
     return session
 
 
@@ -67,6 +68,7 @@ class CheckoutStartView(APIView):
                 {"errors": ["Emailul este obligatoriu."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        email = serializers.EmailField(max_length=254).run_validation(email)
 
         billing_serializer = AddressSerializer(data=request.data.get("billing_address") or {})
         if not billing_serializer.is_valid():
@@ -157,6 +159,8 @@ def _notify_checkout_cancelled(order: Order, *, request=None) -> bool:
     """
     if order.status != Order.Status.PENDING_PAYMENT:
         return False
+    if order.payments.filter(provider__in=[Payment.Provider.CASH, Payment.Provider.BANK_TRANSFER]).exists():
+        return False
 
     Payment.objects.filter(
         order=order,
@@ -215,6 +219,8 @@ class CheckoutResumeView(APIView):
                 {"errors": ["Comanda nu mai poate fi plătită online."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if order.payments.filter(provider__in=[Payment.Provider.CASH, Payment.Provider.BANK_TRANSFER]).exists():
+            return Response({"errors": ["Această comandă nu are plată online."]}, status=status.HTTP_400_BAD_REQUEST)
 
         if not order.lines.exists():
             return Response(
@@ -262,7 +268,7 @@ class StripeWebhookView(APIView):
         except (ValueError, stripe.error.SignatureVerificationError):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
-        if event["type"] == "checkout.session.completed":
+        if event["type"] in ("checkout.session.completed", "checkout.session.async_payment_succeeded"):
             self._handle_session_completed(event)
         elif event["type"] == "checkout.session.expired":
             self._handle_session_expired(event)
@@ -272,6 +278,8 @@ class StripeWebhookView(APIView):
     @transaction.atomic
     def _handle_session_completed(self, event):
         session = event["data"]["object"]
+        if session.get("payment_status") != "paid":
+            return
         payment = (
             Payment.objects.select_for_update()
             .filter(stripe_checkout_session_id=session["id"])

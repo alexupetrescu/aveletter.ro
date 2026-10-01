@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { ApiError, getSiteConfig, startCheckout, type SiteConfigData } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { formatBani } from "@/lib/money";
@@ -18,6 +17,8 @@ export default function CheckoutPage() {
   const [errors, setErrors] = useState<string[]>([]);
   const [siteConfig, setSiteConfig] = useState<SiteConfigData | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"stripe" | "ramburs">("stripe");
+  const [company, setCompany] = useState(false);
+  const [separateBilling, setSeparateBilling] = useState(false);
   const [form, setForm] = useState({
     email: "",
     phone: "",
@@ -29,6 +30,13 @@ export default function CheckoutPage() {
     line1: "",
     line2: "",
     customer_notes: "",
+    company_name: "",
+    cui: "",
+    reg_com: "",
+    billing_line1: "",
+    billing_city: "",
+    billing_county: "",
+    billing_postal_code: "",
   });
 
   useEffect(() => {
@@ -59,15 +67,24 @@ export default function CheckoutPage() {
         customer_notes: form.customer_notes,
         payment_method: paymentMethod,
         billing_address: {
+          is_company: company,
+          company_name: company ? form.company_name : "",
+          cui: company ? form.cui : "",
+          reg_com: company ? form.reg_com : "",
           full_name: fullName,
           phone: form.phone,
           email: form.email,
           country: "RO",
-          county: form.county,
-          city: form.city,
-          postal_code: form.postal_code,
-          line1: form.line1,
-          line2: form.line2,
+          county: separateBilling ? form.billing_county : form.county,
+          city: separateBilling ? form.billing_city : form.city,
+          postal_code: separateBilling ? form.billing_postal_code : form.postal_code,
+          line1: separateBilling ? form.billing_line1 : form.line1,
+          line2: separateBilling ? "" : form.line2,
+        },
+        shipping_address: {
+          full_name: fullName, phone: form.phone, email: form.email, country: "RO",
+          county: form.county, city: form.city, postal_code: form.postal_code,
+          line1: form.line1, line2: form.line2,
         },
       });
       if (result.payment_method === "ramburs" && result.success_url) {
@@ -213,8 +230,22 @@ export default function CheckoutPage() {
           </div>
 
           <div className="mt-4 mb-1 text-[11px] tracking-[2px] text-olive">
-            METODĂ DE PLATĂ
+            DATE DE FACTURARE
           </div>
+          <label className="flex gap-3 items-center text-sm"><input type="checkbox" checked={company} onChange={(event) => setCompany(event.target.checked)} />Factură pe persoană juridică</label>
+          {company && <div className="grid sm:grid-cols-2 gap-4">
+            <input className={`${inputClass} sm:col-span-2`} placeholder="Denumire firmă *" aria-label="Denumire firmă" required value={form.company_name} onChange={set("company_name")} />
+            <input className={inputClass} placeholder="CIF / CUI *" aria-label="CIF / CUI" required value={form.cui} onChange={set("cui")} />
+            <input className={inputClass} placeholder="Nr. Reg. com." aria-label="Număr Registrul Comerțului" value={form.reg_com} onChange={set("reg_com")} />
+          </div>}
+          <label className="flex gap-3 items-center text-sm"><input type="checkbox" checked={separateBilling} onChange={(event) => setSeparateBilling(event.target.checked)} />Adresa de facturare diferă de adresa de livrare</label>
+          {separateBilling && <div className="grid sm:grid-cols-2 gap-4">
+            <input className={`${inputClass} sm:col-span-2`} placeholder="Adresă de facturare *" aria-label="Adresă de facturare" required value={form.billing_line1} onChange={set("billing_line1")} />
+            <input className={inputClass} placeholder="Localitate *" aria-label="Localitate facturare" required value={form.billing_city} onChange={set("billing_city")} />
+            <input className={inputClass} placeholder="Județ" aria-label="Județ facturare" value={form.billing_county} onChange={set("billing_county")} />
+            <input className={inputClass} placeholder="Cod poștal" aria-label="Cod poștal facturare" value={form.billing_postal_code} onChange={set("billing_postal_code")} />
+          </div>}
+          <div className="mt-4 mb-1 text-[11px] tracking-[2px] text-olive">METODĂ DE PLATĂ</div>
           <div className="flex flex-col gap-3">
             <label className="flex cursor-pointer items-start gap-3 border border-ink/18 p-4 text-[13.5px]">
               <input

@@ -398,31 +398,9 @@ def create_order_from_cart(
 
 
 def mark_order_paid(order: Order) -> None:
+    """Record confirmed payment, queue its email, then issue after commit."""
+    from .workflow import record_payment
+    from .invoicing import auto_issue_invoice
 
-    """Called from the payment webhook. Idempotent."""
-
-    from .emails import send_order_confirmation_email
-    from .invoicing import issue_invoice
-
-
-
-    became_paid = order.status != Order.Status.PAID
-
-    if became_paid:
-
-        order.status = Order.Status.PAID
-
-        order.paid_at = timezone.now()
-
-        order.save(update_fields=["status", "paid_at"])
-
-        try:
-            send_order_confirmation_email(order, payment_method="stripe")
-        except Exception:
-            logger.exception(
-                "Failed to send order confirmation email for %s",
-                order.order_number,
-            )
-
-    issue_invoice(order)
-
+    record_payment(order, stripe=True)
+    transaction.on_commit(lambda: auto_issue_invoice(order.pk))

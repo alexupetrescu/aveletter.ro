@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from .communication_serializers import OrderEventSerializer, OutgoingEmailSerializer
 
 from apps.blog.models import AuthorProfile, Category as BlogCategory
 from apps.blog.models import Post, PostRevision, SlugRedirect, Tag
@@ -520,6 +521,7 @@ class AddressCrmSerializer(serializers.ModelSerializer):
         fields = [
             "id", "full_name", "phone", "email", "country", "county",
             "city", "postal_code", "line1", "line2",
+            "is_company", "company_name", "cui", "reg_com",
         ]
 
 
@@ -547,6 +549,7 @@ class PaymentCrmSerializer(serializers.ModelSerializer):
 
 
 class InvoiceCrmSerializer(serializers.ModelSerializer):
+    emails = OutgoingEmailSerializer(many=True, read_only=True)
     number_display = serializers.SerializerMethodField()
     series_code = serializers.CharField(source="series.code", read_only=True)
     order_number = serializers.CharField(source="order.order_number", read_only=True)
@@ -558,6 +561,7 @@ class InvoiceCrmSerializer(serializers.ModelSerializer):
             "order", "order_number", "issued_at", "currency",
             "net_amount", "vat_amount", "gross_amount", "snapshot",
             "efactura_status", "efactura_message", "created_at",
+            "due_date", "emails",
         ]
 
     def get_number_display(self, obj):
@@ -574,6 +578,14 @@ class OrderCrmListSerializer(serializers.ModelSerializer):
 
 
 class OrderCrmDetailSerializer(OrderCrmListSerializer):
+    emails = OutgoingEmailSerializer(many=True, read_only=True)
+    events = OrderEventSerializer(many=True, read_only=True)
+    allowed_transitions = serializers.SerializerMethodField()
+
+    def get_allowed_transitions(self, obj):
+        from apps.orders.workflow import allowed_transitions
+        return allowed_transitions(obj)
+
     lines = OrderLineCrmSerializer(many=True, read_only=True)
     payments = PaymentCrmSerializer(many=True, read_only=True)
     invoices = InvoiceCrmSerializer(many=True, read_only=True)
@@ -587,6 +599,8 @@ class OrderCrmDetailSerializer(OrderCrmListSerializer):
             "vat_breakdown", "customer_notes", "internal_notes",
             "billing_address", "shipping_address",
             "lines", "payments", "invoices",
+            "awb", "courier", "tracking_url", "shipped_at", "invoice_error",
+            "emails", "events", "allowed_transitions",
         ]
 
 
@@ -615,19 +629,57 @@ class VatRateCrmSerializer(serializers.ModelSerializer):
 
 
 class TaxConfigCrmSerializer(serializers.ModelSerializer):
+    invoice_logo_data = serializers.SerializerMethodField()
+
+    def get_invoice_logo_data(self, obj):
+        return asset_summary(obj.invoice_logo, self.context.get("request"))
+
+    def validate_payment_term_days(self, value):
+        if value > 3650:
+            raise serializers.ValidationError("Termenul maxim este de 3650 de zile.")
+        return value
+
+    def validate_invoice_logo(self, value):
+        if value:
+            from PIL import Image
+            try:
+                with value.file.open("rb") as source:
+                    image = Image.open(source)
+                    if image.format not in ("PNG", "JPEG", "WEBP"):
+                        raise ValueError()
+                    image.verify()
+            except Exception:
+                raise serializers.ValidationError("Alege o imagine PNG, JPEG sau WebP validă.")
+        return value
+
+    def validate_default_invoice_series(self, value):
+        if value and not value.is_active:
+            raise serializers.ValidationError("Alege o serie activă.")
+        return value
+
     class Meta:
         model = TaxConfig
         fields = [
             "id", "vat_enabled", "prices_include_vat", "default_vat_rate",
             "legal_name", "cui", "reg_com", "fiscal_address", "updated_at",
+            "invoice_email", "invoice_phone", "iban", "bank", "swift", "share_capital",
+            "invoice_logo", "invoice_logo_data", "invoice_footer", "payment_term_days", "default_invoice_series",
         ]
 
 
 class InvoiceSeriesCrmSerializer(serializers.ModelSerializer):
+    next_number = serializers.IntegerField(min_value=1, max_value=2147483646, required=False)
+
+    def validate(self, attrs):
+        if self.instance and self.instance.invoice_set.exists():
+            for field in ("code", "next_number"):
+                if field in attrs and attrs[field] != getattr(self.instance, field):
+                    raise serializers.ValidationError({field: "Seria a fost folosită; codul și numărul nu mai pot fi schimbate."})
+        return attrs
+
     class Meta:
         model = InvoiceSeries
         fields = ["id", "code", "name", "next_number", "is_active"]
-        read_only_fields = ["next_number"]
 
 
 class SiteConfigCrmSerializer(serializers.ModelSerializer):

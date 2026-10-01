@@ -14,7 +14,7 @@ const MAX_POLL_ATTEMPTS = 5;
 function SuccessContent() {
   const params = useSearchParams();
   const orderNumber = params.get("order");
-  const isRamburs = params.get("payment") === "ramburs";
+  const rambursParam = params.get("payment") === "ramburs";
   const { resetAfterCheckout } = useCart();
   const [order, setOrder] = useState<OrderData | null>(null);
   const [notFoundOrder, setNotFoundOrder] = useState(false);
@@ -32,7 +32,7 @@ function SuccessContent() {
         if (cancelled) return;
         setOrder(data);
         if (
-          !isRamburs &&
+          data.payment_method !== "cash" &&
           data.status === "pending_payment" &&
           attempts < MAX_POLL_ATTEMPTS
         ) {
@@ -41,7 +41,7 @@ function SuccessContent() {
           return;
         }
         if (
-          !isRamburs &&
+          data.payment_method !== "cash" &&
           data.status === "pending_payment" &&
           attempts >= MAX_POLL_ATTEMPTS
         ) {
@@ -56,12 +56,10 @@ function SuccessContent() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderNumber, isRamburs]);
+  }, [orderNumber, rambursParam]);
 
-  const paid =
-    order?.status &&
-    order.status !== "pending_payment" &&
-    order.status !== "draft";
+  const paid = Boolean(order?.paid_at) && order?.status !== "refunded";
+  const isRamburs = order ? order.payment_method === "cash" : rambursParam;
 
   const showResume =
     !isRamburs &&

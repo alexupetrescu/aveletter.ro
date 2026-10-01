@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from . import views
 from .auth_views import CsrfView, LoginView, LogoutView, MeView
+from .communication_views import EmailLogViewSet, EmailTemplateViewSet, NotificationConfigView
 
 router = DefaultRouter()
 # Shop
@@ -32,8 +33,11 @@ router.register("payments", views.PaymentViewSet)
 router.register("carts", views.CartViewSet)
 router.register("vat-rates", views.VatRateViewSet)
 router.register("invoice-series", views.InvoiceSeriesViewSet)
+router.register("email-templates", EmailTemplateViewSet)
+router.register("email-log", EmailLogViewSet)
 
 urlpatterns = [
+    path("notification-config/", NotificationConfigView.as_view(), name="crm-notification-config"),
     path("auth/csrf/", CsrfView.as_view(), name="crm-csrf"),
     path("auth/login/", LoginView.as_view(), name="crm-login"),
     path("auth/logout/", LogoutView.as_view(), name="crm-logout"),

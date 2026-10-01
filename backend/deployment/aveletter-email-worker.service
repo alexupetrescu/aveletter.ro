@@ -1,0 +1,17 @@
+[Unit]
+Description=Ave Letter order and invoice email worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Match the user and Python environment used by the existing Django service.
+User=aveletter
+WorkingDirectory=/var/www/new.aveletter.ro/backend
+ExecStart=/var/www/new.aveletter.ro/backend/venv/bin/python manage.py process_email_queue --watch
+Restart=always
+RestartSec=5
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target

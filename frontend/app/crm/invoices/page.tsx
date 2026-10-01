@@ -3,7 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 
-import { CrmInvoice, CrmInvoiceSeries, Paginated } from "@/lib/crm-api";
+import { crm, CrmInvoice, CrmInvoiceSeries, Paginated } from "@/lib/crm-api";
+import { useQueryClient } from "@tanstack/react-query";
+import InvoiceActions, { PdfPreview } from "@/components/crm/InvoiceActions";
+import EmailHistory, { EMAIL_STATUS } from "@/components/crm/EmailHistory";
 import {
   useCrmCreate,
   useCrmList,
@@ -61,12 +64,38 @@ function InvoiceSnapshotModal({
           </span>
           <StatusBadge value={invoice.efactura_status} label={`e-Factura: ${invoice.efactura_status}`} />
         </div>
-        <pre className="flex-1 overflow-auto text-[11px] leading-relaxed p-5 bg-ink/3">
-          {JSON.stringify(invoice.snapshot, null, 2)}
-        </pre>
+        <div className="flex-1 overflow-auto p-5 space-y-5">
+          <p className="text-sm">Scadență: {invoice.due_date ? new Date(`${invoice.due_date}T12:00:00`).toLocaleDateString("ro-RO") : "—"}</p>
+          <InvoiceActions invoice={invoice} />
+          <EmailHistory emails={invoice.emails} />
+        </div>
       </div>
     </div>
   );
+}
+
+function IssueInvoicePanel() {
+  const [number, setNumber] = useState("");
+  const [preview, setPreview] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [issued, setIssued] = useState<CrmInvoice | null>(null);
+  const toast = useToast();
+  const qc = useQueryClient();
+  async function issue() {
+    setBusy(true);
+    try {
+      setIssued(await crm.post<CrmInvoice>(`/orders/${encodeURIComponent(number.trim())}/issue-invoice/`, {}));
+      await qc.invalidateQueries({ queryKey: ["crm", "invoices"] });
+      toast("Factura este emisă.");
+    } catch (error) { toast(error instanceof Error ? error.message : "Emiterea a eșuat.", "error"); }
+    finally { setBusy(false); }
+  }
+  return <Card title="Emite factură pentru o comandă">
+    <Field label="Număr comandă"><TextInput placeholder="AVE-…" value={number} onChange={(event) => { setNumber(event.target.value); setIssued(null); }} /></Field>
+    <div className="flex flex-wrap gap-2 mt-4"><Button variant="subtle" disabled={!number.trim()} onClick={() => setPreview(true)}>Previzualizează</Button><Button disabled={busy || !number.trim()} onClick={issue}>Emite factura</Button></div>
+    {issued && <p className="text-sm text-olive mt-3">Factura {issued.number_display} este disponibilă în listă. Deschide-o pentru PDF și trimitere.</p>}
+    {preview && <PdfPreview path={`/orders/${encodeURIComponent(number.trim())}/invoice-preview/`} onClose={() => setPreview(false)} />}
+  </Card>;
 }
 
 function SeriesPanel() {
@@ -77,6 +106,7 @@ function SeriesPanel() {
 
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
+  const [nextNumber, setNextNumber] = useState(1);
 
   return (
     <Card title="Serii de facturare">
@@ -122,16 +152,18 @@ function SeriesPanel() {
         <Field label="Nume" className="flex-1">
           <TextInput value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
+        <Field label="Primul număr" className="w-28"><TextInput type="number" min={1} value={nextNumber} onChange={(event) => setNextNumber(Number(event.target.value))} /></Field>
         <Button
           disabled={!code || create.isPending}
           onClick={() =>
             create.mutate(
-              { code, name, is_active: true },
+              { code, name, next_number: nextNumber, is_active: true },
               {
                 onSuccess: () => {
                   toast("Seria a fost creată.");
                   setCode("");
                   setName("");
+                  setNextNumber(1);
                 },
                 onError: (err) => toast(err.message, "error"),
               },
@@ -142,8 +174,7 @@ function SeriesPanel() {
         </Button>
       </div>
       <p className="text-[12px] text-muted mt-3">
-        Numerotarea este secvențială și fără goluri — cerință legală. Numărul
-        următor nu poate fi modificat manual.
+        Numărul este alocat la emitere. După prima factură, codul și contorul seriei sunt protejate.
       </p>
     </Card>
   );
@@ -152,16 +183,18 @@ function SeriesPanel() {
 export default function CrmInvoicesPage() {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<CrmInvoice | null>(null);
-  const { data, isLoading } = useCrmList<Paginated<CrmInvoice>>("invoices", { page });
+  const [search, setSearch] = useState("");
+  const { data, isLoading } = useCrmList<Paginated<CrmInvoice>>("invoices", { page, search });
 
   return (
     <div>
       <PageHeader
         title="Facturi"
-        subtitle="Documente fiscale emise — doar citire; corecțiile se fac prin storno"
+        subtitle="Emitere, previzualizare PDF și trimitere pe email"
       />
       <div className="grid lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-2">
+          <TextInput className="mb-4" placeholder="Caută după comandă, email, serie sau număr…" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
           <DataTable
             columns={[
               {
@@ -180,9 +213,9 @@ export default function CrmInvoicesPage() {
                 render: (inv) => new Date(inv.issued_at).toLocaleDateString("ro-RO"),
               },
               {
-                key: "efactura",
-                header: "e-Factura",
-                render: (inv) => <StatusBadge value={inv.efactura_status} />,
+                key: "email",
+                header: "Email client",
+                render: (inv) => inv.emails[0] ? EMAIL_STATUS[inv.emails[0].status] : "Netrimis",
               },
               {
                 key: "total",
@@ -203,10 +236,10 @@ export default function CrmInvoicesPage() {
             totalCount={data?.count}
           />
         </div>
-        <SeriesPanel />
+        <div className="space-y-6"><IssueInvoicePanel /><SeriesPanel /></div>
       </div>
       {selected && (
-        <InvoiceSnapshotModal invoice={selected} onClose={() => setSelected(null)} />
+        <InvoiceSnapshotModal invoice={data?.results.find((invoice) => invoice.id === selected.id) ?? selected} onClose={() => setSelected(null)} />
       )}
     </div>
   );
