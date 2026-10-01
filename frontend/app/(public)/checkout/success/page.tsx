@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import FilledLink from "@/components/FilledLink";
 import ResumePaymentButton from "@/components/ResumePaymentButton";
 import type { OrderData } from "@/lib/api";
-import { getOrder } from "@/lib/api";
+import { confirmCheckout, getOrder } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { formatBani } from "@/lib/money";
 
@@ -15,6 +15,7 @@ function SuccessContent() {
   const params = useSearchParams();
   const orderNumber = params.get("order");
   const rambursParam = params.get("payment") === "ramburs";
+  const sessionId = params.get("session_id");
   const { resetAfterCheckout } = useCart();
   const [order, setOrder] = useState<OrderData | null>(null);
   const [notFoundOrder, setNotFoundOrder] = useState(false);
@@ -28,6 +29,9 @@ function SuccessContent() {
 
     async function poll() {
       try {
+        if (sessionId && attempts === 0) {
+          await confirmCheckout(orderNumber!, sessionId).catch(() => null);
+        }
         const data = await getOrder(orderNumber!);
         if (cancelled) return;
         setOrder(data);
@@ -56,7 +60,7 @@ function SuccessContent() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderNumber, rambursParam]);
+  }, [orderNumber, rambursParam, sessionId]);
 
   const paid = Boolean(order?.paid_at) && order?.status !== "refunded";
   const isRamburs = order ? order.payment_method === "cash" : rambursParam;

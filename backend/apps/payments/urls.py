@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     CheckoutCancelledNotifyView,
+    CheckoutConfirmView,
     CheckoutResumeView,
     CheckoutStartView,
     StripeWebhookView,
@@ -11,6 +12,7 @@ checkout_urlpatterns = [
     path("start/", CheckoutStartView.as_view(), name="checkout-start"),
     path("resume/", CheckoutResumeView.as_view(), name="checkout-resume"),
     path("cancelled/", CheckoutCancelledNotifyView.as_view(), name="checkout-cancelled"),
+    path("confirm/", CheckoutConfirmView.as_view(), name="checkout-confirm"),
 ]
 
 webhook_urlpatterns = [

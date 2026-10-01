@@ -2,7 +2,6 @@ import logging
 
 import stripe
 from django.conf import settings
-from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
 from rest_framework.response import Response
@@ -12,11 +11,17 @@ from apps.core.frontend_url import resolve_frontend_url
 from apps.orders.models import Cart, Order
 from apps.orders.emails import send_order_confirmation_email, send_payment_resume_email
 from apps.orders.serializers import AddressSerializer
-from apps.orders.services import CheckoutError, create_order_from_cart, mark_order_paid
+from apps.orders.services import CheckoutError, create_order_from_cart
 from apps.orders.views import _cart_key
 
 from .models import Payment
-from .services import create_checkout_session
+from .services import (
+    apply_checkout_session,
+    as_dict,
+    close_pending_sessions,
+    create_checkout_session,
+    retrieve_checkout_session,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -162,13 +167,9 @@ def _notify_checkout_cancelled(order: Order, *, request=None) -> bool:
     if order.payments.filter(provider__in=[Payment.Provider.CASH, Payment.Provider.BANK_TRANSFER]).exists():
         return False
 
-    Payment.objects.filter(
-        order=order,
-        provider=Payment.Provider.STRIPE,
-        status=Payment.Status.PENDING,
-    ).update(status=Payment.Status.CANCELLED)
-
-    if order.payment_resume_email_sent_at:
+    close_pending_sessions(order)
+    order.refresh_from_db()
+    if order.status != Order.Status.PENDING_PAYMENT or order.payment_resume_email_sent_at:
         return False
 
     try:
@@ -237,11 +238,13 @@ class CheckoutResumeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        Payment.objects.filter(
-            order=order,
-            provider=Payment.Provider.STRIPE,
-            status=Payment.Status.PENDING,
-        ).update(status=Payment.Status.CANCELLED)
+        close_pending_sessions(order)
+        order.refresh_from_db()
+        if order.status != Order.Status.PENDING_PAYMENT:
+            return Response(
+                {"errors": ["Comanda a fost deja plătită."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             session = _start_stripe_payment(order, request=request)
@@ -255,8 +258,37 @@ class CheckoutResumeView(APIView):
         return Response(_stripe_checkout_response(order, session))
 
 
+class CheckoutConfirmView(APIView):
+    """
+    Success-page return: ask Stripe directly whether the session was paid, so
+    confirmation never depends on webhook delivery alone.
+    """
+
+    def post(self, request):
+        order_number = (request.data.get("order_number") or "").strip()
+        session_id = (request.data.get("session_id") or "").strip()
+        if not order_number or not session_id.startswith("cs_"):
+            return Response(
+                {"errors": ["Date de confirmare invalide."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        order = get_object_or_404(Order, order_number=order_number)
+        if not order.payments.filter(stripe_checkout_session_id=session_id).exists():
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        try:
+            apply_checkout_session(retrieve_checkout_session(session_id))
+        except stripe.error.StripeError:
+            logger.exception("Stripe confirm failed for %s", order_number)
+            return Response(
+                {"errors": ["Nu am putut verifica plata."]},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        order.refresh_from_db()
+        return Response({"paid": order.paid_at is not None})
+
+
 class StripeWebhookView(APIView):
-    """Signature-verified, idempotent. The only thing that marks orders paid."""
+    """Signature-verified, idempotent. Stripe is the source of truth for payment state."""
 
     def post(self, request):
         payload = request.body
@@ -268,85 +300,29 @@ class StripeWebhookView(APIView):
         except (ValueError, stripe.error.SignatureVerificationError):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
-        if event["type"] in ("checkout.session.completed", "checkout.session.async_payment_succeeded"):
-            self._handle_session_completed(event)
-        elif event["type"] == "checkout.session.expired":
-            self._handle_session_expired(event)
+        if event["type"] in (
+            "checkout.session.completed",
+            "checkout.session.async_payment_succeeded",
+            "checkout.session.expired",
+        ):
+            self._handle_session(as_dict(event))
 
         return Response({"received": True})
 
-    @transaction.atomic
-    def _handle_session_completed(self, event):
-        session = event["data"]["object"]
-        if session.get("payment_status") != "paid":
-            return
-        payment = (
-            Payment.objects.select_for_update()
-            .filter(stripe_checkout_session_id=session["id"])
-            .select_related("order")
-            .first()
+    def _handle_session(self, event: dict):
+        payment = apply_checkout_session(
+            event["data"]["object"], event_id=event["id"], event_type=event["type"],
         )
-        if payment is None:
-            logger.warning("Webhook for unknown checkout session %s", session["id"])
+        if payment is None or event["type"] != "checkout.session.expired":
             return
-
-        if payment.last_event_id == event["id"]:
-            return
-        if payment.status == Payment.Status.SUCCEEDED:
-            return
-        if payment.status == Payment.Status.CANCELLED:
-            logger.info(
-                "Ignoring webhook for cancelled session %s (order %s)",
-                session["id"], payment.order.order_number,
-            )
-            return
-        if payment.order.status != Order.Status.PENDING_PAYMENT:
-            logger.info(
-                "Ignoring webhook for order %s in status %s",
-                payment.order.order_number, payment.order.status,
-            )
-            return
-
-        payment.status = Payment.Status.SUCCEEDED
-        payment.stripe_payment_intent_id = session.get("payment_intent") or ""
-        payment.last_event_id = event["id"]
-        payment.raw_payload = {"id": event["id"], "type": event["type"]}
-        payment.save(update_fields=[
-            "status", "stripe_payment_intent_id", "last_event_id",
-            "raw_payload", "updated_at",
-        ])
-
-        mark_order_paid(payment.order)
-
-    @transaction.atomic
-    def _handle_session_expired(self, event):
-        session = event["data"]["object"]
-        payment = (
-            Payment.objects.select_for_update()
-            .filter(stripe_checkout_session_id=session["id"])
-            .select_related("order")
-            .first()
-        )
-        if payment is None:
-            return
-        if payment.last_event_id == event["id"]:
-            return
-        if payment.status != Payment.Status.PENDING:
-            return
-
-        payment.status = Payment.Status.CANCELLED
-        payment.last_event_id = event["id"]
-        payment.raw_payload = {"id": event["id"], "type": event["type"]}
-        payment.save(update_fields=[
-            "status", "last_event_id", "raw_payload", "updated_at",
-        ])
-
         order = payment.order
-        if order.status != Order.Status.PENDING_PAYMENT:
+        if (
+            payment.status != Payment.Status.CANCELLED
+            or order.status != Order.Status.PENDING_PAYMENT
+            or order.payment_resume_email_sent_at
+            or order.payments.filter(status=Payment.Status.PENDING).exists()
+        ):
             return
-        if order.payment_resume_email_sent_at:
-            return
-
         try:
             send_payment_resume_email(order)
         except Exception:

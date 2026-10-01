@@ -477,6 +477,17 @@ export function notifyCheckoutCancelled(
   });
 }
 
+/** Asks the backend to verify the Stripe session directly (webhook fallback). */
+export function confirmCheckout(
+  orderNumber: string,
+  sessionId: string,
+): Promise<{ paid: boolean }> {
+  return request<{ paid: boolean }>("/api/checkout/confirm/", {
+    method: "POST",
+    body: JSON.stringify({ order_number: orderNumber, session_id: sessionId }),
+  });
+}
+
 export function getOrder(orderNumber: string): Promise<OrderData> {
   return request<OrderData>(`/api/orders/${orderNumber}/`, {
     cache: "no-store",

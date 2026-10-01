@@ -9,16 +9,40 @@ import { formatBani } from "@/lib/money";
 import {
   Button,
   Card,
-  PageHeader,
   StatusBadge,
   TextArea,
   useToast,
 } from "@/components/crm/ui";
-import OrderWorkflow from "@/components/crm/OrderWorkflow";
+import OrderWorkflow, {
+  formatWhen,
+  IssueInvoice,
+  ShippingCard,
+  StripeSyncButton,
+} from "@/components/crm/OrderWorkflow";
 import InvoiceActions from "@/components/crm/InvoiceActions";
 import EmailHistory from "@/components/crm/EmailHistory";
 import BillingEditor from "@/components/crm/BillingEditor";
 import { ORDER_STATUS_LABELS } from "@/components/crm/orderStatus";
+
+const EVENT_LABELS: Record<string, string> = {
+  placed: "Comandă plasată",
+  shipping_updated: "Date expediere actualizate",
+  billing_updated: "Facturare actualizată",
+};
+
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  pending: "În așteptare",
+  succeeded: "Încasată",
+  failed: "Eșuată",
+  cancelled: "Anulată",
+  refunded: "Rambursată",
+};
+
+const PROVIDER_LABELS: Record<string, string> = {
+  stripe: "Card (Stripe)",
+  cash: "Ramburs",
+  bank_transfer: "Transfer bancar",
+};
 
 
 function AddressBlock({ title, address }: { title: string; address: CrmAddress | null }) {
@@ -86,22 +110,36 @@ export default function CrmOrderDetailPage({
   if (isLoading || !order) {
     return <p className="text-muted text-sm">Se încarcă…</p>;
   }
+  const cash = order.payments.some((payment) => payment.provider === "cash");
 
   return (
     <div>
-      <PageHeader
-        title={order.order_number}
-        subtitle={`${order.email}${order.phone ? ` · ${order.phone}` : ""}`}
-        actions={
-          <Link href="/crm/orders" className="avelink text-[13px] text-olive self-center">
-            ← Toate comenzile
-          </Link>
-        }
-      />
+      <header className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-8">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-serif text-[28px] sm:text-[32px] leading-tight">{order.order_number}</h1>
+            <StatusBadge value={order.status} label={ORDER_STATUS_LABELS[order.status]} />
+            {order.paid_at ? (
+              <StatusBadge value="succeeded" label="Plătită" />
+            ) : !["cancelled", "refunded"].includes(order.status) && (
+              <StatusBadge value="pending_payment" label={cash ? "Ramburs neîncasat" : "Neplătită"} />
+            )}
+          </div>
+          <p className="text-[13px] text-muted mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+            <span className="text-ink font-medium">{formatBani(order.total_amount)}</span>
+            <span>{order.email}</span>
+            {order.phone && <span>{order.phone}</span>}
+            {order.placed_at && <span>Plasată {formatWhen(order.placed_at)}</span>}
+          </p>
+        </div>
+        <Link href="/crm/orders" className="avelink text-[13px] text-olive shrink-0 sm:mt-2">
+          ← Toate comenzile
+        </Link>
+      </header>
 
-      <OrderWorkflow key={`${order.status}:${order.awb}:${order.courier}:${order.tracking_url}`} order={order} />
+      <OrderWorkflow order={order} />
 
-      <div className="grid lg:grid-cols-3 gap-6 items-start">
+      <div id="detalii" className="grid lg:grid-cols-3 gap-6 items-start scroll-mt-6">
         <div className="lg:col-span-2 space-y-6">
           {/* Lines */}
           <Card title={`Produse (${order.lines.length})`}>
@@ -172,30 +210,35 @@ export default function CrmOrderDetailPage({
               <table className="w-full text-sm">
                 <tbody>
                   {order.payments.map((p) => (
-                    <tr key={p.id} className="border-b border-ink/5 last:border-0">
-                      <td className="py-2 pr-3 capitalize">{p.provider}</td>
-                      <td className="py-2 pr-3">
-                        <StatusBadge value={p.status} />
+                    <tr key={p.id} className="border-b border-ink/5 last:border-0 align-top">
+                      <td className="py-2.5 pr-3">
+                        {PROVIDER_LABELS[p.provider] ?? p.provider}
+                        {p.stripe_payment_intent_id && (
+                          <span className="block text-[11px] text-stone font-mono">{p.stripe_payment_intent_id}</span>
+                        )}
                       </td>
-                      <td className="py-2 pr-3 text-muted text-[12px]">
-                        {new Date(p.created_at).toLocaleString("ro-RO")}
+                      <td className="py-2.5 pr-3">
+                        <StatusBadge value={p.status} label={PAYMENT_STATUS_LABELS[p.status]} />
                       </td>
-                      <td className="py-2 text-right font-medium">
-                        {formatBani(p.amount)}
-                      </td>
+                      <td className="py-2.5 pr-3 text-muted text-[12px]">{formatWhen(p.updated_at)}</td>
+                      <td className="py-2.5 text-right font-medium">{formatBani(p.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            )}
+            {order.payments.some((p) => p.provider === "stripe") && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-ink/8 pt-4">
+                <p className="text-[12px] text-muted">Starea plăților online este preluată direct din Stripe.</p>
+                <StripeSyncButton order={order} />
+              </div>
             )}
           </Card>
 
           {/* Invoices */}
           <Card title={`Facturi (${order.invoices.length})`}>
             {order.invoices.length === 0 ? (
-              <p className="text-muted text-sm">
-                Factura se emite automat la marcarea plății.
-              </p>
+              <IssueInvoice order={order} />
             ) : (
               <div className="space-y-4">
                 {order.invoices.map((inv) => (
@@ -258,14 +301,13 @@ export default function CrmOrderDetailPage({
               </div>
             </dl>
             <p className="text-[12px] text-muted mt-3">
-              Plasată:{" "}
-              {order.placed_at ? new Date(order.placed_at).toLocaleString("ro-RO") : "—"}
+              Plasată: {order.placed_at ? formatWhen(order.placed_at) : "—"}
               <br />
-              Plătită: {order.paid_at ? new Date(order.paid_at).toLocaleString("ro-RO") : "—"}
+              Plătită: {order.paid_at ? formatWhen(order.paid_at) : "—"}
             </p>
           </Card>
 
-          <Card title="Adrese">
+          <Card title="Client și adrese">
             <div className="space-y-4">
               <AddressBlock title="Livrare" address={order.shipping_address} />
               <AddressBlock title="Facturare" address={order.billing_address} />
@@ -279,13 +321,10 @@ export default function CrmOrderDetailPage({
             </Card>
           )}
 
-          <Card title="Istoric etape">
-            {!order.events.length && <p className="text-sm text-muted">Nu exist? evenimente ?nregistrate.</p>}
-            <div className="space-y-3">{order.events.map((event) => <div key={event.id} className="border-b border-ink/10 pb-2 text-sm">
-              <p>{ORDER_STATUS_LABELS[event.key as keyof typeof ORDER_STATUS_LABELS] ?? ({ placed: "Comand? plasat?", shipping_updated: "Date expediere actualizate", billing_updated: "Facturare actualizat?" }[event.key] ?? event.key)}</p>
-              <p className="text-xs text-muted">{new Date(event.created_at).toLocaleString("ro-RO")} ? {event.actor_name}</p>
-            </div>)}</div>
+          <Card title="Expediere">
+            <ShippingCard key={`${order.awb}:${order.courier}:${order.tracking_url}`} order={order} />
           </Card>
+
           <Card title="Note interne">
             <TextArea
               rows={4}
@@ -308,6 +347,21 @@ export default function CrmOrderDetailPage({
             >
               Salvează notele
             </Button>
+          </Card>
+
+          <Card title="Istoric etape">
+            {!order.events.length && <p className="text-sm text-muted">Nu există evenimente înregistrate.</p>}
+            <ol className="space-y-3">
+              {order.events.map((event) => (
+                <li key={event.id} className="border-b border-ink/8 last:border-0 pb-2 text-sm">
+                  <p>{ORDER_STATUS_LABELS[event.key as keyof typeof ORDER_STATUS_LABELS] ?? EVENT_LABELS[event.key] ?? event.key}</p>
+                  <p className="text-xs text-muted">
+                    {formatWhen(event.created_at)}
+                    {event.actor_name && ` · ${event.actor_name}`}
+                  </p>
+                </li>
+              ))}
+            </ol>
           </Card>
         </div>
       </div>

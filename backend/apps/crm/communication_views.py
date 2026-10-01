@@ -1,6 +1,8 @@
 import uuid
 from functools import wraps
 
+import stripe
+
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.http import HttpResponse
@@ -16,6 +18,7 @@ from apps.orders.models import Address, EmailTemplate, Invoice, NotificationConf
 from apps.orders.notifications import DEFAULT_TEMPLATES, PLACEHOLDERS, get_template, queue_email, render_template, template_context
 from apps.orders.serializers import AddressSerializer
 from apps.orders.workflow import record_payment, record_refund, update_order
+from apps.payments.services import sync_order_stripe_payments
 from .communication_serializers import (
     EmailTemplateSerializer, NotificationConfigSerializer, OrderUpdateSerializer,
     OutgoingEmailSerializer, PaymentRecordSerializer, SendRequestSerializer,
@@ -71,6 +74,14 @@ class OrderWorkflowActions:
         data.is_valid(raise_exception=True)
         order = record_payment(self.get_object(), actor=request.user, send=data.validated_data.get("send_email"))
         return Response(self.get_serializer(order).data)
+
+    @action(detail=True, methods=["post"], url_path="sync-stripe")
+    def sync_stripe(self, request, **kwargs):
+        try:
+            changed = sync_order_stripe_payments(self.get_object())
+        except stripe.error.StripeError as exc:
+            raise ValidationError({"errors": [f"Stripe nu a răspuns: {exc.user_message or exc}"]})
+        return Response({"changed": changed, "order": self.get_serializer(self.get_object()).data})
 
     @action(detail=True, methods=["post"], url_path="record-refund")
     @validation_errors

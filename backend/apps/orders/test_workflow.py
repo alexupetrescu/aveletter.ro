@@ -176,21 +176,69 @@ class WorkflowTests(TestCase):
             "id": "cs_workflow", "payment_status": "unpaid", "payment_intent": "pi_workflow",
         }}}
         webhook = StripeWebhookView()
-        webhook._handle_session_completed(event)
+        webhook._handle_session(event)
         self.order.refresh_from_db()
         self.assertIsNone(self.order.paid_at)
         self.assertFalse(self.order.invoices.exists())
         event["data"]["object"]["payment_status"] = "paid"
         event["id"] = "evt_paid"
         with self.captureOnCommitCallbacks(execute=True):
-            webhook._handle_session_completed(event)
+            webhook._handle_session(event)
         event["id"] = "evt_paid_replay"
         with self.captureOnCommitCallbacks(execute=True):
-            webhook._handle_session_completed(event)
+            webhook._handle_session(event)
         self.order.refresh_from_db()
         self.assertIsNotNone(self.order.paid_at)
         self.assertEqual(self.order.invoices.count(), 1)
         self.assertEqual(self.order.emails.filter(template_key="paid").count(), 1)
+
+    def _signed_webhook(self, event_type, session):
+        import hashlib, hmac, json, time
+        payload = json.dumps({"id": f"evt_{event_type}", "object": "event", "type": event_type,
+                              "data": {"object": {"object": "checkout.session", **session}}})
+        stamp = int(time.time())
+        signature = hmac.new(b"whsec_test", f"{stamp}.{payload}".encode(), hashlib.sha256).hexdigest()
+        with override_settings(STRIPE_WEBHOOK_SECRET="whsec_test"), self.captureOnCommitCallbacks(execute=True):
+            return self.client.post("/api/payments/webhook/stripe/", payload, content_type="application/json",
+                                    HTTP_STRIPE_SIGNATURE=f"t={stamp},v1={signature}")
+
+    def test_real_signed_webhook_marks_paid(self):
+        # Regression: SDK StripeObject has no .get(), every real webhook used to 500.
+        self.order.payments.update(provider="stripe", stripe_checkout_session_id="cs_signed")
+        response = self._signed_webhook("checkout.session.completed",
+                                        {"id": "cs_signed", "payment_status": "paid", "payment_intent": "pi_1"})
+        self.assertEqual(response.status_code, 200)
+        self.order.refresh_from_db()
+        self.assertIsNotNone(self.order.paid_at)
+        self.assertEqual(self.order.payments.get().status, "succeeded")
+
+    def test_paid_session_wins_over_local_cancel_and_manual_progress(self):
+        self.order.payments.update(provider="stripe", status="cancelled", stripe_checkout_session_id="cs_late")
+        self.order.status = "in_production"
+        self.order.save()
+        self._signed_webhook("checkout.session.completed", {"id": "cs_late", "payment_status": "paid"})
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payments.get().status, "succeeded")
+        self.assertIsNotNone(self.order.paid_at)
+        self.assertEqual(self.order.status, "in_production")
+
+    def test_success_page_and_crm_confirm_payment_with_stripe(self):
+        self.order.payments.update(provider="stripe", stripe_checkout_session_id="cs_confirm")
+        paid = {"id": "cs_confirm", "payment_status": "paid", "status": "complete"}
+        with patch("apps.payments.views.retrieve_checkout_session", return_value=paid),                 self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post("/api/checkout/confirm/", {
+                "order_number": self.order.order_number, "session_id": "cs_other"}, format="json")
+            self.assertEqual(response.status_code, 404)
+            response = self.client.post("/api/checkout/confirm/", {
+                "order_number": self.order.order_number, "session_id": "cs_confirm"}, format="json")
+        self.assertEqual(response.data, {"paid": True})
+        self.order.payments.update(status="pending")
+        self.order.paid_at = None
+        self.order.save()
+        with patch("apps.payments.services.retrieve_checkout_session", return_value=paid):
+            response = self.client.post(f"{self.root}/sync-stripe/", format="json")
+        self.assertEqual(response.data["changed"], 1)
+        self.assertEqual(response.data["order"]["payments"][0]["status"], "succeeded")
 
     def test_company_checkout_queues_received_email_and_freezes_billing(self):
         from apps.shop.models import Product
