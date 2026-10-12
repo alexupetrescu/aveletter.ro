@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import { ApiError, getProduct, getSiteConfig, ProductListItem } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
 import ProductConfigurator from "./ProductConfigurator";
+import JsonLd from "@/components/JsonLd";
+import { breadcrumbs, pageMetadata, productSchema } from "@/lib/seo";
 
 export const revalidate = 60;
 
@@ -20,25 +22,17 @@ export async function generateMetadata({
     ]);
     const title =
       product.seo_title ||
-      `${product.title} — Ave Letter Studio`;
+      product.title;
     const description =
       product.seo_description ||
       product.short_description ||
       config?.default_seo_description ||
       "";
     const ogImage = product.featured_image?.url;
-    return {
-      title,
-      description,
-      openGraph: {
-        title,
-        description,
-        type: "website",
-        ...(ogImage ? { images: [{ url: ogImage }] } : {}),
-      },
-    };
-  } catch {
-    return { title: "Produs — Ave Letter Studio" };
+    return pageMetadata({ title, description, path: `/shop/${product.slug}`, image: ogImage, config });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) notFound();
+    throw error;
   }
 }
 
@@ -87,6 +81,13 @@ export default async function ProductPage({
 
   return (
     <div>
+      <JsonLd data={productSchema(product, siteConfig)} />
+      <JsonLd data={breadcrumbs([
+        { name: "Acasă", path: "/" },
+        { name: "Produse", path: "/shop" },
+        ...(primaryCategory ? [{ name: primaryCategory.name, path: `/shop/categorie/${primaryCategory.slug}` }] : []),
+        { name: product.title, path: `/shop/${product.slug}` },
+      ], siteConfig)} />
       {/* BREADCRUMB */}
       <div className="mx-auto flex max-w-[1440px] items-center gap-2 px-6 pt-7 text-xs text-stone lg:px-12">
         <Link href="/" className="avelink text-stone">
@@ -95,7 +96,7 @@ export default async function ProductPage({
         <span>/</span>
         {primaryCategory ? (
           <Link
-            href={`/shop?categorie=${primaryCategory.slug}`}
+            href={`/shop/categorie/${primaryCategory.slug}`}
             className="avelink text-stone"
           >
             {primaryCategory.name}

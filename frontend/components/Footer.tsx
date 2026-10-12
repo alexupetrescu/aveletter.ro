@@ -47,6 +47,9 @@ export default async function Footer() {
             <Link href="/contact" className="avelink text-footer-text">
               Contact
             </Link>
+            <Link href="/ghid-comenzi" className="avelink text-footer-text">
+              Personalizare și livrare
+            </Link>
           </div>
         </div>
         <div>

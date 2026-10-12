@@ -69,6 +69,7 @@ class PostListSerializer(serializers.ModelSerializer):
         fields = [
             "title", "slug", "excerpt", "reading_time", "published_at",
             "category", "tags", "featured_image", "author",
+            "updated_at", "canonical_url", "noindex",
         ]
 
     def get_featured_image(self, obj):
@@ -82,7 +83,6 @@ class PostDetailSerializer(PostListSerializer):
         fields = PostListSerializer.Meta.fields + [
             "body", "body_text", "schema_version",
             "seo_title", "seo_description", "og_image",
-            "canonical_url", "noindex",
         ]
 
     def get_og_image(self, obj):

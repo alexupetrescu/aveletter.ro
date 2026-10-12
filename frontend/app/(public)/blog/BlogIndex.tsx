@@ -1,6 +1,3 @@
-"use client";
-
-import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { PostListItem } from "@/lib/api";
 import PhotoBox from "@/components/PhotoBox";
@@ -13,24 +10,14 @@ function formatDate(iso: string): string {
   });
 }
 
-export default function BlogIndex({ posts }: { posts: PostListItem[] }) {
-  const [active, setActive] = useState("Toate");
-
-  const categoryNames = useMemo(
-    () => [
-      "Toate",
-      ...Array.from(
-        new Set(posts.map((p) => p.category?.name).filter(Boolean) as string[]),
-      ),
-    ],
-    [posts],
-  );
-
-  const [featured, ...rest] = posts;
-  const visible =
-    active === "Toate"
-      ? rest
-      : posts.filter((p) => p.category?.name === active);
+export default function BlogIndex({ posts, categories, active, page }: {
+  posts: PostListItem[];
+  categories: Array<{ name: string; slug: string }>;
+  active?: string;
+  page: number;
+}) {
+  const featured = !active && page === 1 ? posts[0] : undefined;
+  const visible = featured ? posts.slice(1) : posts;
 
   if (posts.length === 0) {
     return (
@@ -45,7 +32,7 @@ export default function BlogIndex({ posts }: { posts: PostListItem[] }) {
   return (
     <>
       {/* FEATURED POST */}
-      {featured && active === "Toate" && (
+      {featured && (
         <div className="mx-auto max-w-[1440px] px-6 pt-5 pb-[90px] lg:px-12">
           <Link
             href={`/blog/${featured.slug}`}
@@ -54,7 +41,8 @@ export default function BlogIndex({ posts }: { posts: PostListItem[] }) {
             <PhotoBox
               asset={featured.featured_image}
               aspect="16/11"
-              label="foto articol"
+              label={featured.title}
+              priority
             />
             <div>
               <div className="mb-3.5 text-[11px] tracking-[2px] text-olive uppercase">
@@ -76,21 +64,22 @@ export default function BlogIndex({ posts }: { posts: PostListItem[] }) {
       )}
 
       {/* CATEGORY FILTER */}
-      <div className="mx-auto flex max-w-[1440px] flex-wrap justify-center gap-3.5 px-6 pb-14 lg:px-12">
-        {categoryNames.map((name) => (
-          <button
-            key={name}
-            onClick={() => setActive(name)}
+      <nav aria-label="Categorii de articole" className="mx-auto flex max-w-[1440px] flex-wrap justify-center gap-3.5 px-6 pb-14 lg:px-12">
+        {[{ name: "Toate", slug: undefined }, ...categories].map(({ name, slug }) => (
+          <Link
+            key={slug ?? "all"}
+            href={slug ? `/blog?categorie=${encodeURIComponent(slug)}` : "/blog"}
+            aria-current={slug === active ? "page" : undefined}
             className={`cursor-pointer border px-[22px] py-[11px] text-[11.5px] tracking-[1.5px] ${
-              name === active
+              slug === active
                 ? "border-ink bg-ink text-paper"
                 : "border-ink/20 bg-transparent text-body"
             }`}
           >
             {name}
-          </button>
+          </Link>
         ))}
-      </div>
+      </nav>
 
       {/* POST GRID */}
       <div className="mx-auto max-w-[1440px] px-6 pb-32 lg:px-12">
@@ -105,7 +94,7 @@ export default function BlogIndex({ posts }: { posts: PostListItem[] }) {
                 asset={post.featured_image}
                 aspect="4/3"
                 className="mb-5"
-                label="foto"
+                label={post.title}
               />
               <div className="mb-2.5 text-[10.5px] tracking-[1.5px] text-olive uppercase">
                 {post.category?.name ?? "JURNAL"} ·{" "}

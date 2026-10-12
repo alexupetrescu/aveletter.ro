@@ -32,6 +32,7 @@ class ProductListView(generics.ListAPIView):
     def get_queryset(self):
         qs = (
             Product.objects.live()
+            .order_by("title", "pk")
             .select_related("featured_image")
             .prefetch_related(categories_prefetch())
         )

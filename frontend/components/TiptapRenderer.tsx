@@ -120,6 +120,8 @@ function renderNode(node: TiptapNode, key: number): React.ReactNode {
           key={key}
           src={String(node.attrs?.src ?? "")}
           alt={String(node.attrs?.alt ?? "")}
+          loading="lazy"
+          decoding="async"
           className="w-full rounded-sm my-9"
         />
       );

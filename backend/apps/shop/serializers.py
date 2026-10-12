@@ -117,7 +117,7 @@ class ProductListSerializer(serializers.ModelSerializer):
             "title", "slug", "product_type", "sku", "category", "categories",
             "short_description",
             "featured_image", "base_price_amount", "currency", "is_featured",
-            "availability",
+            "availability", "updated_at",
         ]
 
     def get_category(self, obj):

@@ -41,6 +41,8 @@ export interface ProductListItem {
   base_price_amount: number;
   currency: string;
   is_featured: boolean;
+  sku?: string | null;
+  updated_at?: string;
   availability: ProductAvailability | null;
 }
 
@@ -179,6 +181,9 @@ export interface PostListItem {
   excerpt: string;
   reading_time: number;
   published_at: string;
+  updated_at?: string;
+  canonical_url?: string;
+  noindex?: boolean;
   category: { name: string; slug: string; description: string } | null;
   tags: Array<{ name: string; slug: string }>;
   featured_image: AssetData | null;
@@ -190,6 +195,7 @@ export interface PostDetail extends PostListItem {
   body_text: string;
   seo_title: string;
   seo_description: string;
+  og_image?: AssetData | null;
 }
 
 export interface CartItemData {
@@ -239,7 +245,7 @@ export interface OrderData {
   }>;
 }
 
-interface Paginated<T> {
+export interface Paginated<T> {
   count: number;
   next: string | null;
   previous: string | null;
@@ -291,20 +297,38 @@ export function getCategories(): Promise<Category[]> {
   } as RequestInit);
 }
 
-export async function getProducts(params?: {
+export async function getProductsPage(params?: {
   category?: string;
   featured?: boolean;
-}): Promise<ProductListItem[]> {
+  page?: number;
+}): Promise<Paginated<ProductListItem>> {
   const qs = new URLSearchParams();
   if (params?.category) qs.set("category", params.category);
   if (params?.featured) qs.set("featured", "1");
+  if (params?.page && params.page > 1) qs.set("page", String(params.page));
   const suffix = qs.size ? `?${qs}` : "";
-  const data = await request<Paginated<ProductListItem>>(
+  return request<Paginated<ProductListItem>>(
     `/api/shop/products/${suffix}`,
     { next: { revalidate: 60 } } as RequestInit,
   );
-  return data.results;
 }
+
+// Small selections (homepage and related items) deliberately use the first page.
+export async function getProducts(params?: { category?: string; featured?: boolean }) {
+  return (await getProductsPage(params)).results;
+}
+
+async function collectPages<T>(fetchPage: (page: number) => Promise<Paginated<T>>): Promise<T[]> {
+  const items: T[] = [];
+  for (let page = 1; ; page++) {
+    const data = await fetchPage(page);
+    items.push(...data.results);
+    if (!data.next) return items;
+    if (!data.results.length) throw new Error("Empty catalog page with a next link");
+  }
+}
+
+export const getAllProducts = () => collectPages((page) => getProductsPage({ page }));
 
 export function getProduct(slug: string): Promise<ProductDetail> {
   return request<ProductDetail>(`/api/shop/products/${slug}/`, {
@@ -312,11 +336,23 @@ export function getProduct(slug: string): Promise<ProductDetail> {
   } as RequestInit);
 }
 
-export async function getPosts(): Promise<PostListItem[]> {
-  const data = await request<Paginated<PostListItem>>("/api/blog/posts/", {
+export function getPostsPage(params?: { page?: number; category?: string }): Promise<Paginated<PostListItem>> {
+  const qs = new URLSearchParams();
+  if (params?.page && params.page > 1) qs.set("page", String(params.page));
+  if (params?.category) qs.set("category", params.category);
+  return request<Paginated<PostListItem>>(`/api/blog/posts/${qs.size ? `?${qs}` : ""}`, {
     next: { revalidate: 60 },
   } as RequestInit);
-  return data.results;
+}
+
+export async function getPosts(): Promise<PostListItem[]> {
+  return (await getPostsPage()).results;
+}
+
+export const getAllPosts = () => collectPages((page) => getPostsPage({ page }));
+
+export function getBlogCategories(): Promise<Array<{ name: string; slug: string; description: string }>> {
+  return request("/api/blog/categories/", { next: { revalidate: 60 } } as RequestInit);
 }
 
 export function getPost(slug: string): Promise<PostDetail> {

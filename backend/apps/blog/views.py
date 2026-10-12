@@ -1,7 +1,24 @@
 from rest_framework import generics
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from .models import Post
-from .serializers import PostDetailSerializer, PostListSerializer
+from .models import Category, Post
+from .redirects import resolve_redirect
+from .serializers import CategorySerializer, PostDetailSerializer, PostListSerializer
+
+
+class CategoryListView(generics.ListAPIView):
+    serializer_class = CategorySerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return Category.objects.filter(post__in=Post.objects.live()).distinct()
+
+
+class RedirectResolveView(APIView):
+    def get(self, request):
+        path = request.query_params.get("path", "")
+        return Response({"new_path": resolve_redirect(path)})
 
 
 class PostListView(generics.ListAPIView):
@@ -10,6 +27,7 @@ class PostListView(generics.ListAPIView):
     def get_queryset(self):
         qs = (
             Post.objects.live()
+            .order_by("-published_at", "-created_at", "-pk")
             .select_related(
                 "category", "author", "author__author_profile__photo", "featured_image",
             )

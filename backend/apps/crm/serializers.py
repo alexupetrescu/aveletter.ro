@@ -415,6 +415,23 @@ class TagCrmSerializer(serializers.ModelSerializer):
 
 
 class SlugRedirectCrmSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from apps.blog.redirects import resolve_redirect, validate_redirect_path
+
+        old = attrs.get("old_path", getattr(self.instance, "old_path", ""))
+        new = attrs.get("new_path", getattr(self.instance, "new_path", ""))
+        for field, value in (("old_path", old), ("new_path", new)):
+            try:
+                validate_redirect_path(value)
+            except (DjangoValidationError, ValueError):
+                raise serializers.ValidationError({field: "Introdu o cale publică locală validă, de exemplu /blog/articol."})
+        old = old.rstrip("/") or "/"
+        new = new.rstrip("/") or "/"
+        if old == new or resolve_redirect(new) == old:
+            raise serializers.ValidationError({"new_path": "Redirectul ar crea o buclă."})
+        return attrs
+
     class Meta:
         model = SlugRedirect
         fields = ["id", "old_path", "new_path", "created_at"]

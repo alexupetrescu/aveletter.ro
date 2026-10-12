@@ -27,6 +27,7 @@ export default function ProductCard({
           asset={product.featured_image}
           label={`foto: ${product.title}`}
           aspect="4/5"
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
         />
         {product.is_featured && (
           <div className="absolute top-3.5 left-3.5 bg-ink px-3 py-1.5 text-[10px] tracking-[1.5px] text-paper">

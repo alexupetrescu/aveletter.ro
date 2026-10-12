@@ -1,21 +1,48 @@
-import { getPosts } from "@/lib/api";
+import { cache } from "react";
+import { notFound } from "next/navigation";
+import { ApiError, getPostsPage, getBlogCategories } from "@/lib/api";
+import { pageMetadata, pageNumber, paginatedPath } from "@/lib/seo";
+import Pagination from "@/components/Pagination";
 import BlogIndex from "./BlogIndex";
 
 export const revalidate = 60;
 
-export const metadata = {
-  title: "Jurnal — Ave Letter Studio",
-  description:
-    "Povești din atelier, inspirație pentru cadouri și gânduri despre arta scrisului de mână.",
-};
+type Props = { searchParams: Promise<{ page?: string | string[]; categorie?: string | string[] }> };
 
-export default async function BlogPage() {
-  let posts: Awaited<ReturnType<typeof getPosts>> = [];
+const loadBlog = cache(async (page: number, category?: string) => {
+  const categories = await getBlogCategories();
+  const selected = categories.find((c) => c.slug === category);
+  if (category && !selected) notFound();
   try {
-    posts = await getPosts();
-  } catch {
-    posts = [];
+    const data = await getPostsPage({ page, category });
+    return { data, categories, selected };
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) notFound();
+    throw error;
   }
+});
+
+async function readParams(props: Props) {
+  const values = await props.searchParams;
+  const page = pageNumber(values.page);
+  if (!page || Array.isArray(values.categorie)) notFound();
+  const category = values.categorie || undefined;
+  return { page, category, path: category ? `/blog?categorie=${encodeURIComponent(category)}` : "/blog" };
+}
+
+export async function generateMetadata(props: Props) {
+  const { page, category, path } = await readParams(props);
+  const { selected, data } = await loadBlog(page, category);
+  return pageMetadata({
+    title: `${selected ? `${selected.name} — Jurnal` : "Jurnal de caligrafie"}${page > 1 ? ` — Pagina ${page}` : ""}`,
+    description: selected?.description || "Povești din atelier, inspirație pentru cadouri și gânduri despre arta scrisului de mână.",
+    path: paginatedPath(path, page), noindex: data.count === 0,
+  });
+}
+
+export default async function BlogPage(props: Props) {
+  const { page, category, path } = await readParams(props);
+  const { data, categories, selected } = await loadBlog(page, category);
 
   return (
     <div>
@@ -25,7 +52,7 @@ export default async function BlogPage() {
           jurnal de atelier
         </div>
         <h1 className="mb-[18px] font-serif text-[40px] font-medium lg:text-[52px]">
-          Jurnal
+          {selected?.name || "Jurnal"}
         </h1>
         <p className="mx-auto max-w-[520px] text-[14.5px] leading-[1.8] text-muted">
           Povești din atelier, inspirație pentru cadouri și câteva gânduri
@@ -33,7 +60,8 @@ export default async function BlogPage() {
         </p>
       </div>
 
-      <BlogIndex posts={posts} />
+      <BlogIndex posts={data.results} categories={categories} active={category} page={page} />
+      <Pagination page={page} path={path} hasNext={Boolean(data.next)} />
 
       {/* NEWSLETTER */}
       <div className="border-t border-ink/8 bg-paper px-6 py-20 text-center lg:px-12 lg:py-[100px]">

@@ -654,11 +654,13 @@ export default function ProductConfigurator({
       {/* GALLERY */}
       <div>
         {gallery.length > 0 ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={gallery[Math.min(activeImage, gallery.length - 1)].url}
-            alt={gallery[Math.min(activeImage, gallery.length - 1)].alt_text}
-            className="mb-4 aspect-square w-full object-cover"
+          <PhotoBox
+            asset={gallery[Math.min(activeImage, gallery.length - 1)]}
+            label={product.title}
+            aspect="1/1"
+            priority
+            sizes="(max-width: 1024px) 100vw, 50vw"
+            className="mb-4"
           />
         ) : (
           <PhotoBox
@@ -670,16 +672,18 @@ export default function ProductConfigurator({
         {gallery.length > 1 && (
           <div className="grid grid-cols-3 gap-4">
             {gallery.map((asset, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <button
                 key={i}
-                src={asset.url}
-                alt={asset.alt_text}
+                type="button"
+                aria-label={`Vezi fotografia ${i + 1}: ${product.title}`}
+                aria-pressed={i === activeImage}
                 onClick={() => setActiveImage(i)}
                 className={`aspect-square w-full cursor-pointer object-cover ${
                   i === activeImage ? "outline outline-ink" : ""
                 }`}
-              />
+              >
+                <PhotoBox asset={asset} aspect="1/1" label={`${product.title} — fotografia ${i + 1}`} sizes="(max-width: 1024px) 33vw, 17vw" />
+              </button>
             ))}
           </div>
         )}

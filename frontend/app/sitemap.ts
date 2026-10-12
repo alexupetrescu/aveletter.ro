@@ -1,47 +1,22 @@
 import type { MetadataRoute } from "next";
-import { getPosts, getProducts, getSiteConfig } from "@/lib/api";
+import { getAllPosts, getAllProducts, getCategories, getSiteConfig } from "@/lib/api";
+import { absoluteUrl } from "@/lib/seo";
+
+export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  let domain = "aveletter.ro";
-  try {
-    const config = await getSiteConfig();
-    domain = config.domain || domain;
-  } catch {
-    // use default
-  }
-  const base = `https://${domain}`;
-
-  const staticPages: MetadataRoute.Sitemap = [
-    { url: base, changeFrequency: "weekly", priority: 1 },
-    { url: `${base}/shop`, changeFrequency: "daily", priority: 0.9 },
-    { url: `${base}/blog`, changeFrequency: "weekly", priority: 0.7 },
-    { url: `${base}/contact`, changeFrequency: "monthly", priority: 0.6 },
+  // Fail with a server error on upstream failure rather than publishing a truncated sitemap.
+  const [config, products, posts, categories] = await Promise.all([
+    getSiteConfig(), getAllProducts(), getAllPosts(), getCategories(),
+  ]);
+  const usedCategories = new Set(products.flatMap((p) =>
+    (p.categories?.length ? p.categories : p.category ? [p.category] : []).map((c) => c.slug)));
+  return [
+    ...["/", "/shop", "/blog", "/contact", "/ghid-comenzi"].map((path) => ({ url: absoluteUrl(path, config) })),
+    ...categories.filter((c) => usedCategories.has(c.slug)).map((c) => ({ url: absoluteUrl(`/shop/categorie/${c.slug}`, config) })),
+    ...products.map((p) => ({ url: absoluteUrl(`/shop/${p.slug}`, config), lastModified: p.updated_at })),
+    ...posts.filter((p) => !p.noindex && (!p.canonical_url ||
+      absoluteUrl(p.canonical_url, config) === absoluteUrl(`/blog/${p.slug}`, config)))
+      .map((p) => ({ url: absoluteUrl(`/blog/${p.slug}`, config), lastModified: p.updated_at || p.published_at })),
   ];
-
-  let productPages: MetadataRoute.Sitemap = [];
-  let blogPages: MetadataRoute.Sitemap = [];
-
-  try {
-    const products = await getProducts();
-    productPages = products.map((p) => ({
-      url: `${base}/shop/${p.slug}`,
-      changeFrequency: "weekly" as const,
-      priority: 0.8,
-    }));
-  } catch {
-    // skip
-  }
-
-  try {
-    const posts = await getPosts();
-    blogPages = posts.map((p) => ({
-      url: `${base}/blog/${p.slug}`,
-      changeFrequency: "monthly" as const,
-      priority: 0.6,
-    }));
-  } catch {
-    // skip
-  }
-
-  return [...staticPages, ...productPages, ...blogPages];
 }

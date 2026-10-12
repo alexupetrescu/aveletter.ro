@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Beau_Rivage, Cormorant_Garamond, Jost } from "next/font/google";
 import Providers from "@/components/Providers";
 import { getSiteConfig } from "@/lib/api";
+import { absoluteUrl, DEFAULT_IMAGE, siteOrigin } from "@/lib/seo";
 import "./globals.css";
 
 const jost = Jost({
@@ -36,11 +37,10 @@ export async function generateMetadata(): Promise<Metadata> {
   }
   const title = config?.default_seo_title || defaultTitle;
   const description = config?.default_seo_description || defaultDescription;
-  const domain = config?.domain || "aveletter.ro";
-  const ogImage = config?.default_og_image_url;
+  const ogImage = absoluteUrl(config?.default_og_image_url || DEFAULT_IMAGE, config);
 
   return {
-    metadataBase: new URL(`https://${domain}`),
+    metadataBase: new URL(siteOrigin(config)),
     title: {
       default: title,
       template: "%s — Ave Letter Studio",

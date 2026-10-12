@@ -6,14 +6,16 @@ import { resolveContact } from "@/lib/contact";
 import PhotoBox from "@/components/PhotoBox";
 import FilledLink from "@/components/FilledLink";
 import ProductCard from "@/components/ProductCard";
+import { pageMetadata } from "@/lib/seo";
 
 export const revalidate = 0;
 
 const CALIGRAPHY_YEARS = new Date().getFullYear() - 2017;
 
-export const metadata: Metadata = {
-  title: "Ave Letter Studio — Cadouri personalizate prin caligrafie",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const config = await getSiteConfig().catch(() => null);
+  return pageMetadata({ title: config?.default_seo_title || "Cadouri personalizate prin caligrafie", path: "/", config });
+}
 
 const SERVICES = [
   {
@@ -34,16 +36,12 @@ const SERVICES = [
 ];
 
 async function loadData() {
-  try {
     const [categories, products, siteConfig] = await Promise.all([
       getCategories(),
       getProducts({ featured: true }),
       getSiteConfig().catch(() => null),
     ]);
     return { categories, products, siteConfig };
-  } catch {
-    return { categories: [], products: [], siteConfig: null };
-  }
 }
 
 export default async function LandingPage() {
@@ -56,16 +54,17 @@ export default async function LandingPage() {
       {/* HERO */}
       <div
         className="photo-placeholder-dark relative flex min-h-[560px] items-center !justify-start h-[88vh]"
-        style={
-          hero?.background_image_url
-            ? {
-                backgroundImage: `url(${hero.background_image_url})`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-              }
-            : undefined
-        }
       >
+        {hero?.background_image_url && <Image
+          src={hero.background_image_url}
+          alt=""
+          fill
+          sizes="100vw"
+          loading="eager"
+          fetchPriority="high"
+          className="object-cover"
+          unoptimized={process.env.NODE_ENV !== "production" || !hero.background_image_url.startsWith("https://aveletter.ro/media/")}
+        />}
         {!hero?.background_image_url && (
           <div className="absolute top-[26px] left-1/2 -translate-x-1/2 font-mono text-xs tracking-[0.5px] text-stone">
             [ foto: masă de atelier, cerneală &amp; pană, lumină naturală ]
@@ -118,7 +117,7 @@ export default async function LandingPage() {
           width={922}
           height={1024}
           className="aspect-[4/5] w-full object-cover"
-          priority
+          sizes="(max-width: 1024px) 100vw, 45vw"
         />
         <div>
           <div className="mb-2.5 font-script text-[26px] text-olive">
@@ -139,7 +138,7 @@ export default async function LandingPage() {
             vreau să rămâi cu emoția unui cadou personalizat.
           </p>
           <Link
-            href="/blog"
+            href="/blog/buna-eu-sunt-adina"
             className="avelink border-b border-ink pb-1 text-xs tracking-[2px]"
           >
             CITEȘTE POVESTEA COMPLETĂ →
@@ -162,7 +161,7 @@ export default async function LandingPage() {
             {categories.map((cat) => (
               <Link
                 key={cat.slug}
-                href={`/shop?categorie=${cat.slug}`}
+                href={`/shop/categorie/${cat.slug}`}
                 className="avelink block"
               >
                 <PhotoBox
@@ -300,7 +299,7 @@ export default async function LandingPage() {
               rel="noopener noreferrer"
               className="avelink block"
             >
-              <PhotoBox asset={asset} aspect="1/1" variant="dark" label="foto" />
+              <PhotoBox asset={asset} aspect="1/1" variant="dark" label="Creație din atelierul Ave Letter Studio" sizes="(max-width: 640px) 50vw, 20vw" />
             </a>
           )) ??
             Array.from({ length: 5 }).map((_, i) => (

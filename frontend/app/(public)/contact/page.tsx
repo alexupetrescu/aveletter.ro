@@ -3,12 +3,14 @@ import Link from "next/link";
 
 import { getSiteConfig } from "@/lib/api";
 import { resolveContact } from "@/lib/contact";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Contact — Ave Letter Studio",
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata({ title: "Contact", path: "/contact",
   description:
     "Scrie-ne pentru comenzi personalizate, întrebări despre produse sau colaborări. Răspundem cu drag.",
-};
+  });
+}
 
 export default async function ContactPage() {
   let contact = resolveContact(null);

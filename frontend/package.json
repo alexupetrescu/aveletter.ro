@@ -6,7 +6,8 @@
     "dev": "next dev -p 3020",
     "build": "next build",
     "start": "next start -p 3020",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:seo": "node --test tests/seo.test.cjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",

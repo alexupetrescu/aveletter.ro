@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { ApiError, getPost, getPosts } from "@/lib/api";
+import { ApiError, getPost, getPosts, getSiteConfig } from "@/lib/api";
+import JsonLd from "@/components/JsonLd";
+import { absoluteUrl, breadcrumbs, pageMetadata, siteOrigin } from "@/lib/seo";
 import PhotoBox from "@/components/PhotoBox";
 import TiptapRenderer, { hasTiptapContent } from "@/components/TiptapRenderer";
 
@@ -15,15 +17,16 @@ export async function generateMetadata({
   const { slug } = await params;
   try {
     const post = await getPost(slug);
-    const title = post.seo_title || `${post.title} — Ave Letter Studio`;
+    const title = post.seo_title || post.title;
     const description = post.seo_description || post.excerpt;
-    return {
-      title,
-      description,
-      openGraph: { title, description, type: "article" },
-    };
-  } catch {
-    return { title: "Articol — Ave Letter Studio" };
+    return pageMetadata({ title, description,
+      path: post.canonical_url || `/blog/${post.slug}`, noindex: post.noindex,
+      image: post.og_image?.url || post.featured_image?.url,
+      article: { publishedTime: post.published_at, modifiedTime: post.updated_at, authors: [post.author.name] },
+    });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) notFound();
+    throw error;
   }
 }
 
@@ -60,9 +63,22 @@ export default async function PostPage({
     .split(/\n\s*\n/)
     .map((p) => p.trim())
     .filter(Boolean);
+  const config = await getSiteConfig().catch(() => null);
+  const url = absoluteUrl(post.canonical_url || `/blog/${post.slug}`, config);
+  const image = post.og_image || post.featured_image;
 
   return (
     <div>
+      <JsonLd data={{
+        "@context": "https://schema.org", "@type": "BlogPosting", "@id": `${url}#article`,
+        headline: post.title, description: post.excerpt, mainEntityOfPage: url, url,
+        datePublished: post.published_at, dateModified: post.updated_at || post.published_at,
+        inLanguage: "ro", ...(image ? { image: [absoluteUrl(image.url, config)] } : {}),
+        author: { "@type": "Person", name: post.author.name, description: post.author.bio,
+          sameAs: Object.values(post.author.socials).filter(Boolean) },
+        publisher: { "@id": `${siteOrigin(config)}/#organization` },
+      }} />
+      <JsonLd data={breadcrumbs([{ name: "Acasă", path: "/" }, { name: "Jurnal", path: "/blog" }, { name: post.title, path: `/blog/${post.slug}` }], config)} />
       {/* BREADCRUMB */}
       <div className="mx-auto flex max-w-[820px] items-center gap-2 px-6 pt-10 text-xs text-stone lg:px-12">
         <Link href="/" className="avelink text-stone">
@@ -95,7 +111,9 @@ export default async function PostPage({
         <PhotoBox
           asset={post.featured_image}
           aspect="16/8"
-          label="foto articol"
+          label={post.title}
+          priority
+          sizes="(max-width: 1200px) 100vw, 1200px"
         />
       </div>
 
@@ -123,6 +141,10 @@ export default async function PostPage({
           <img
             src={post.author.photo.url}
             alt={post.author.photo.alt_text || post.author.name}
+            width={64}
+            height={64}
+            loading="lazy"
+            decoding="async"
             className="size-16 shrink-0 rounded-full object-cover"
           />
         ) : (
@@ -183,7 +205,7 @@ export default async function PostPage({
                   asset={p.featured_image}
                   aspect="4/3"
                   className="mb-[18px]"
-                  label="foto"
+                  label={p.title}
                 />
                 <div className="mb-2 text-[10.5px] tracking-[1.5px] text-olive uppercase">
                   {p.category?.name ?? "JURNAL"}
