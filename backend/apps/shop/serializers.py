@@ -116,8 +116,8 @@ class ProductListSerializer(serializers.ModelSerializer):
         fields = [
             "title", "slug", "product_type", "sku", "category", "categories",
             "short_description",
-            "featured_image", "base_price_amount", "currency", "is_featured",
-            "availability", "updated_at",
+            "featured_image", "base_price_amount", "show_price", "currency", "is_featured",
+            "availability", "stock_quantity", "updated_at",
         ]
 
     def get_category(self, obj):

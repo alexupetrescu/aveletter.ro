@@ -236,12 +236,15 @@ export interface CrmProductList {
   categories: CrmProductCategoryOnProduct[];
   sku: string | null;
   base_price_amount: number;
+  show_price: boolean;
   currency: string;
   is_featured: boolean;
   featured_image_data: AssetSummary | null;
   published_at: string | null;
   updated_at: string;
-  stock_quantity: number;
+  stock_quantity: number | null;
+  /** Write-only: prevent overwriting inventory changed by a checkout. */
+  expected_stock_quantity?: number | null;
   stock_status: "in_stock" | "limited" | "on_order";
 }
 

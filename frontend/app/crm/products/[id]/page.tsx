@@ -120,6 +120,7 @@ export default function CrmProductEditorPage({
       category_ids: selectedCategoryIds(draft),
       primary_category_id: primaryCategoryId(draft),
       base_price_amount: draft.base_price_amount ?? 0,
+      show_price: draft.show_price ?? true,
       short_description: draft.short_description ?? "",
       description: (draft.description as TiptapDoc) ?? {},
       featured_image: draft.featured_image ?? null,
@@ -130,11 +131,18 @@ export default function CrmProductEditorPage({
       production_time_max_days: draft.production_time_max_days ?? 10,
       seo_title: draft.seo_title ?? "",
       seo_description: draft.seo_description ?? "",
-      stock_quantity: draft.stock_quantity ?? 0,
       stock_status: draft.stock_status ?? "on_order",
     };
+    if (isNew || draft.stock_quantity !== product?.stock_quantity) {
+      body.stock_quantity = draft.stock_quantity ?? null;
+      if (!isNew) body.expected_stock_quantity = product?.stock_quantity ?? null;
+    }
     if (!body.title || !body.slug) {
       toast("Titlul și slug-ul sunt obligatorii.", "error");
+      return;
+    }
+    if (body.stock_quantity != null && (!Number.isSafeInteger(body.stock_quantity) || body.stock_quantity < 0)) {
+      toast("Stocul trebuie să fie un număr întreg pozitiv sau 0.", "error");
       return;
     }
     if (isNew) {
@@ -306,6 +314,13 @@ export default function CrmProductEditorPage({
                       value={draft.base_price_amount ?? 0}
                       onChange={(v) => patch({ base_price_amount: v ?? 0 })}
                     />
+                    <div className="mt-2">
+                      <Checkbox
+                        label="Afișează prețul pe site"
+                        checked={draft.show_price ?? true}
+                        onChange={(show_price) => patch({ show_price })}
+                      />
+                    </div>
                   </Field>
                 </div>
                 <Field label="SKU" hint="Opțional. Cod unic al produsului.">
@@ -314,37 +329,38 @@ export default function CrmProductEditorPage({
                     onChange={(e) => patch({ sku: e.target.value || null })}
                   />
                 </Field>
-                {draft.product_type === "premade" && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <Field label="Cantitate în stoc" hint="Bucăți disponibile în atelier.">
-                      <TextInput
-                        type="number"
-                        min={0}
-                        value={draft.stock_quantity ?? 0}
-                        onChange={(e) =>
-                          patch({ stock_quantity: Math.max(0, Number(e.target.value) || 0) })
-                        }
-                      />
-                    </Field>
-                    <Field
-                      label="Stare stoc"
-                      hint="La 0 bucăți, clienții văd automat „La comandă”."
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Cantitate în stoc" hint="Gol = la comandă (fără limită). 0 = stoc epuizat, comenzile sunt blocate.">
+                    <TextInput
+                      type="number"
+                      min={0}
+                      step={1}
+                      placeholder="La comandă"
+                      value={draft.stock_quantity ?? ""}
+                      onChange={(e) =>
+                        patch({ stock_quantity: e.target.value === "" ? null : Number(e.target.value) })
+                      }
+                    />
+                  </Field>
+                  <Field
+                    label="Stare stoc"
+                    hint="Eticheta afișată când există stoc. La 0 bucăți apare „Stoc epuizat”."
+                  >
+                    <Select
+                      value={draft.stock_status ?? "on_order"}
+                      disabled={draft.stock_quantity === 0 || draft.stock_quantity == null}
+                      onChange={(e) =>
+                        patch({
+                          stock_status: e.target.value as CrmProductDetail["stock_status"],
+                        })
+                      }
                     >
-                      <Select
-                        value={draft.stock_status ?? "on_order"}
-                        onChange={(e) =>
-                          patch({
-                            stock_status: e.target.value as CrmProductDetail["stock_status"],
-                          })
-                        }
-                      >
-                        <option value="in_stock">În stoc</option>
-                        <option value="limited">Stoc limitat (afișează numărul)</option>
-                        <option value="on_order">La comandă</option>
-                      </Select>
-                    </Field>
-                  </div>
-                )}
+                      <option value="in_stock">În stoc</option>
+                      <option value="limited">Stoc limitat (afișează numărul)</option>
+                      <option value="on_order">La comandă</option>
+                    </Select>
+                  </Field>
+                </div>
                 <Field label="Descriere scurtă">
                   <TextArea
                     rows={2}

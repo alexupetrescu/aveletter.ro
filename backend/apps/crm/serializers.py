@@ -313,7 +313,7 @@ class ProductCrmListSerializer(serializers.ModelSerializer):
         fields = [
             "id", "title", "slug", "product_type", "status", "publish_state",
             "category", "category_name", "categories", "sku", "base_price_amount",
-            "currency",
+            "currency", "show_price",
             "is_featured", "featured_image_data", "published_at", "updated_at",
             "stock_quantity", "stock_status",
         ]
@@ -336,6 +336,9 @@ class ProductCrmListSerializer(serializers.ModelSerializer):
 
 
 class ProductCrmDetailSerializer(ProductCrmListSerializer):
+    expected_stock_quantity = serializers.IntegerField(
+        required=False, allow_null=True, min_value=0, write_only=True,
+    )
     category_ids = serializers.ListField(
         child=serializers.IntegerField(), required=False, write_only=True,
     )
@@ -352,7 +355,7 @@ class ProductCrmDetailSerializer(ProductCrmListSerializer):
 
     class Meta(ProductCrmListSerializer.Meta):
         fields = ProductCrmListSerializer.Meta.fields + [
-            "category_ids", "primary_category_id",
+            "category_ids", "primary_category_id", "expected_stock_quantity",
             "short_description", "description", "description_text",
             "featured_image", "vat_rate", "requires_manual_approval",
             "production_time_min_days", "production_time_max_days",
@@ -361,6 +364,16 @@ class ProductCrmDetailSerializer(ProductCrmListSerializer):
             "text_pricing",
         ]
         read_only_fields = ["description_text", "updated_at"]
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        expected = attrs.pop("expected_stock_quantity", serializers.empty)
+        if self.instance and "stock_quantity" in attrs and expected is not serializers.empty:
+            if self.instance.stock_quantity != expected:
+                raise serializers.ValidationError({
+                    "stock_quantity": "Stocul a fost modificat între timp. Reîncarcă produsul și încearcă din nou.",
+                })
+        return attrs
 
     def validate_sku(self, value):
         sku = normalize_sku(value)

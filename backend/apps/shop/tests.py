@@ -464,7 +464,8 @@ class PremadeStockTests(TestCase):
             stock_status=Product.StockStatus.IN_STOCK,
         )
         avail = product.public_availability
-        self.assertEqual(avail["label"], "La comandă")
+        self.assertEqual(avail["label"], "Stoc epuizat")
+        self.assertEqual(avail["status"], "out_of_stock")
         self.assertFalse(avail["show_quantity"])
 
     def test_public_availability_in_stock_hides_quantity(self):

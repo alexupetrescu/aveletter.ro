@@ -1,12 +1,14 @@
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.shortcuts import get_object_or_404
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.shop.models import Product, ProductOption, ProductVariant
 from apps.shop.pricing import quote_product
+from apps.shop.stock import validate_cart_stock
 
 from .models import Cart, CartItem, CartUpload, Invoice, Order
 from .serializers import CartSerializer, InvoiceSerializer, OrderSerializer
@@ -68,6 +70,7 @@ class CartView(APIView):
 
 
 class CartItemsView(APIView):
+    @transaction.atomic
     def post(self, request):
         if not _cart_key(request):
             return Response(
@@ -75,6 +78,7 @@ class CartItemsView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         cart = _get_cart(request, create=True)
+        cart = Cart.objects.select_for_update().get(pk=cart.pk)
 
         product = get_object_or_404(
             Product.objects.live(), slug=request.data.get("product_slug"),
@@ -91,12 +95,10 @@ class CartItemsView(APIView):
             ).select_related("group")
         )
         inputs = request.data.get("inputs") or {}
-        try:
-            quantity = max(1, int(request.data.get("quantity", 1)))
-        except (TypeError, ValueError):
-            quantity = 1
+        quantity = serializers.IntegerField(min_value=1).run_validation(request.data.get("quantity", 1))
 
         try:
+            validate_cart_stock(cart, product, variant=variant, quantity=quantity)
             quote = quote_product(
                 product, variant=variant, selected_options=options, inputs=inputs,
             )
@@ -118,22 +120,18 @@ class CartItemsView(APIView):
 
 
 class CartItemDetailView(APIView):
-    def _get_item(self, request, item_id):
+    @transaction.atomic
+    def patch(self, request, item_id):
         cart = _get_cart(request)
         if cart is None:
-            return None
-        return CartItem.objects.filter(cart=cart, pk=item_id).first()
-
-    def patch(self, request, item_id):
-        item = self._get_item(request, item_id)
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        cart = Cart.objects.select_for_update().get(pk=cart.pk)
+        item = cart.items.select_related("product", "variant").filter(pk=item_id).first()
         if item is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         if "quantity" in request.data:
-            try:
-                item.quantity = max(1, int(request.data["quantity"]))
-            except (TypeError, ValueError):
-                pass
+            item.quantity = serializers.IntegerField(min_value=1).run_validation(request.data["quantity"])
         if "inputs" in request.data:
             item.inputs = request.data["inputs"] or {}
         if "options" in request.data:
@@ -142,7 +140,8 @@ class CartItemDetailView(APIView):
                     pk__in=request.data["options"],
                 ).select_related("group")
             )
-            item.selected_options.set(options)
+        else:
+            options = list(item.selected_options.all())
         if "variant_id" in request.data:
             variant_id = request.data["variant_id"]
             item.variant = (
@@ -153,10 +152,14 @@ class CartItemDetailView(APIView):
             )
 
         try:
+            validate_cart_stock(
+                cart, item.product, variant=item.variant, quantity=item.quantity,
+                exclude_item_id=item.pk,
+            )
             quote = quote_product(
                 item.product,
                 variant=item.variant,
-                selected_options=list(item.selected_options.all()),
+                selected_options=options,
                 inputs=item.inputs,
             )
         except ValidationError as exc:
@@ -166,10 +169,16 @@ class CartItemDetailView(APIView):
         item.unit_price_amount = quote.unit_price_amount
         item.price_breakdown = quote.breakdown
         item.save()
+        item.selected_options.set(options)
         return _cart_response(request, item.cart)
 
+    @transaction.atomic
     def delete(self, request, item_id):
-        item = self._get_item(request, item_id)
+        cart = _get_cart(request)
+        if cart is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        cart = Cart.objects.select_for_update().get(pk=cart.pk)
+        item = cart.items.filter(pk=item_id).first()
         if item is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         cart = item.cart
@@ -180,8 +189,11 @@ class CartItemDetailView(APIView):
 class CartItemUploadView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
+    @transaction.atomic
     def post(self, request, item_id):
         cart = _get_cart(request)
+        if cart is not None:
+            cart = Cart.objects.select_for_update().get(pk=cart.pk)
         item = CartItem.objects.filter(cart=cart, pk=item_id).first() if cart else None
         if item is None:
             return Response(status=status.HTTP_404_NOT_FOUND)

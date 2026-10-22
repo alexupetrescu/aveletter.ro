@@ -76,6 +76,9 @@ class Product(Publishable):
     base_price_amount = models.PositiveIntegerField(
         default=0, help_text="Base price in bani. Example: 5000 = 50 RON.",
     )
+    show_price = models.BooleanField(
+        default=True, help_text="Display prices on product cards and product pages.",
+    )
     # Blank strings collide on unique in Postgres ('' is a real value).
     # NULL means "no SKU yet"; NULLs are exempt from the unique constraint.
     sku = models.CharField(
@@ -102,14 +105,14 @@ class Product(Publishable):
         ON_ORDER = "on_order", "La comandă"
 
     stock_quantity = models.PositiveIntegerField(
-        default=0,
-        help_text="For premade products: units available in atelier.",
+        null=True, blank=True, default=None,
+        help_text="Units available. Empty means made to order; zero means sold out.",
     )
     stock_status = models.CharField(
         max_length=20,
         choices=StockStatus.choices,
         default=StockStatus.ON_ORDER,
-        help_text="How availability is shown to clients (premade products).",
+        help_text="How availability is shown to clients when stock is available.",
     )
 
     objects = PublishedQuerySet.as_manager()
@@ -176,13 +179,13 @@ class Product(Publishable):
 
     @property
     def public_availability(self):
-        """Client-facing stock label for premade products."""
-        if self.product_type != self.ProductType.PREMADE:
+        """Stock is independent of the product's pricing/personalization type."""
+        if self.stock_quantity is None:
             return None
         if self.stock_quantity == 0:
             return {
-                "status": self.StockStatus.ON_ORDER,
-                "label": "La comandă",
+                "status": "out_of_stock",
+                "label": "Stoc epuizat",
                 "show_quantity": False,
                 "quantity": 0,
             }

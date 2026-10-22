@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -p 3020",
     "lint": "next lint",
-    "test:seo": "node --test tests/seo.test.cjs"
+    "test:seo": "node --test tests/seo.test.cjs",
+    "test:products": "node --test tests/product-ui.test.cjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",

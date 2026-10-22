@@ -204,9 +204,15 @@ function StockStatusSelect({
   const update = useCrmUpdate<CrmProductList>("products");
   const toast = useToast();
 
+  if (product.stock_quantity === 0) {
+    return <span className="text-[12px] text-red-700">Stoc epuizat</span>;
+  }
+  if (product.stock_quantity === null) {
+    return <span className="text-[12px] text-muted">La comandă</span>;
+  }
   return (
     <Select
-      value={product.stock_quantity === 0 ? "on_order" : product.stock_status}
+      value={product.stock_status}
       disabled={update.isPending}
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => {
@@ -239,16 +245,25 @@ function StockQuantityInput({
 }) {
   const update = useCrmUpdate<CrmProductList>("products");
   const toast = useToast();
-  const [value, setValue] = useState(String(product.stock_quantity));
+  const [value, setValue] = useState(product.stock_quantity?.toString() ?? "");
 
   function commit() {
-    const stock_quantity = Math.max(0, Number(value) || 0);
+    const stock_quantity = value.trim() === "" ? null : Number(value);
+    if (stock_quantity !== null && (!Number.isSafeInteger(stock_quantity) || stock_quantity < 0)) {
+      toast("Stocul trebuie să fie un număr întreg pozitiv sau 0. Lasă gol pentru produse la comandă.", "error");
+      setValue(product.stock_quantity?.toString() ?? "");
+      return;
+    }
     if (stock_quantity === product.stock_quantity) return;
     update.mutate(
-      { id: product.id, body: { stock_quantity } },
+      { id: product.id, body: { stock_quantity, expected_stock_quantity: product.stock_quantity } },
       {
         onSuccess: onUpdated,
-        onError: (err) => toast(err.message, "error"),
+        onError: (err) => {
+          toast(err.message, "error");
+          setValue(product.stock_quantity?.toString() ?? "");
+          onUpdated();
+        },
       },
     );
   }
@@ -257,6 +272,10 @@ function StockQuantityInput({
     <input
       type="number"
       min={0}
+      step={1}
+      placeholder="La comandă"
+      aria-label={`Stoc pentru ${product.title}`}
+      title="Bucăți disponibile. Gol = la comandă; 0 = stoc epuizat. Se salvează când părăsești câmpul."
       value={value}
       disabled={update.isPending}
       onClick={(e) => e.stopPropagation()}
@@ -268,8 +287,32 @@ function StockQuantityInput({
           (e.target as HTMLInputElement).blur();
         }
       }}
-      className="w-16 border border-ink/15 bg-paper px-2 py-1 text-[13px] text-right rounded-sm"
+      className="w-28 border border-ink/15 bg-paper px-2 py-1 text-[13px] text-right rounded-sm disabled:opacity-60"
     />
+  );
+}
+
+function PriceVisibilityCheckbox({ product }: { product: CrmProductList }) {
+  const update = useCrmUpdate<CrmProductList>("products");
+  const toast = useToast();
+  return (
+    <div className="flex justify-center" onClick={(e) => e.stopPropagation()}>
+      <input
+        type="checkbox"
+        checked={product.show_price}
+        disabled={update.isPending}
+        aria-label={`Afișează prețul pentru ${product.title}`}
+        title={product.show_price ? "Preț afișat pe site" : "Preț ascuns pe site"}
+        onChange={(e) => update.mutate(
+          {
+            id: product.id,
+            body: { show_price: e.target.checked },
+          },
+          { onError: (err) => toast(err.message, "error") },
+        )}
+        className="size-4 cursor-pointer accent-[#5a6437] disabled:opacity-60"
+      />
+    </div>
   );
 }
 
@@ -368,26 +411,20 @@ export default function CrmProductsPage() {
             key: "stock",
             header: "Stoc",
             className: "text-right",
-            render: (p) =>
-              p.product_type === "premade" ? (
-                <StockQuantityInput
-                  key={`${p.id}-${p.stock_quantity}`}
-                  product={p}
-                  onUpdated={() => refetch()}
-                />
-              ) : (
-                "—"
-              ),
+            render: (p) => (
+              <StockQuantityInput
+                key={`${p.id}-${p.stock_quantity}`}
+                product={p}
+                onUpdated={() => refetch()}
+              />
+            ),
           },
           {
             key: "stock_status",
             header: "Stare stoc",
-            render: (p) =>
-              p.product_type === "premade" ? (
-                <StockStatusSelect product={p} onUpdated={() => refetch()} />
-              ) : (
-                "—"
-              ),
+            render: (p) => (
+              <StockStatusSelect product={p} onUpdated={() => refetch()} />
+            ),
           },
           {
             key: "state",
@@ -401,6 +438,12 @@ export default function CrmProductsPage() {
             header: "Preț bază",
             className: "text-right",
             render: (p) => formatBani(p.base_price_amount),
+          },
+          {
+            key: "visible",
+            header: "Afișează prețul",
+            className: "text-center",
+            render: (p) => <PriceVisibilityCheckbox product={p} />,
           },
         ]}
         rows={data?.results ?? []}

@@ -24,7 +24,7 @@ export interface ProductCategoryRef {
 }
 
 export interface ProductAvailability {
-  status: "in_stock" | "limited" | "on_order";
+  status: "in_stock" | "limited" | "on_order" | "out_of_stock";
   label: string;
   show_quantity: boolean;
   quantity: number;
@@ -39,11 +39,13 @@ export interface ProductListItem {
   short_description: string;
   featured_image: AssetData | null;
   base_price_amount: number;
+  show_price: boolean;
   currency: string;
   is_featured: boolean;
   sku?: string | null;
   updated_at?: string;
   availability: ProductAvailability | null;
+  stock_quantity: number | null;
 }
 
 export interface ProductVariant {
@@ -208,6 +210,7 @@ export interface CartItemData {
   selected_option_ids: number[];
   selected_option_labels: Array<{ group: string; label: string }>;
   quantity: number;
+  stock_error: string | null;
   inputs: Record<string, unknown>;
   unit_price_amount: number;
   line_total_amount: number;

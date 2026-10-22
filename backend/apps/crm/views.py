@@ -79,6 +79,8 @@ class ProductViewSet(CrmViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset().order_by("-updated_at")
+        if self.action in ("update", "partial_update"):
+            qs = qs.select_for_update(of=("self",))
         search = self.request.query_params.get("search")
         if search:
             qs = qs.filter(Q(title__icontains=search) | Q(slug__icontains=search))
@@ -92,6 +94,10 @@ class ProductViewSet(CrmViewSet):
                 categories_prefetch("outgoing_recommendations__target"),
             )
         return qs
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -151,6 +157,16 @@ class ProductVariantViewSet(CrmViewSet):
     serializer_class = s.ProductVariantCrmSerializer
     filter_fields = {"product": "product_id"}
     pagination_class = None
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.action in ("update", "partial_update"):
+            qs = qs.select_for_update()
+        return qs
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
 
 
 class ProductOptionGroupViewSet(CrmViewSet):

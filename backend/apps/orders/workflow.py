@@ -50,6 +50,9 @@ def update_order(order, *, data, actor=None):
     if changing:
         previous = order.status
         order.status = target
+        if target == "cancelled":
+            from apps.shop.stock import restore_order_stock
+            restore_order_stock(order)
         if target == "shipped":
             order.shipped_at = timezone.now()
         order.save()

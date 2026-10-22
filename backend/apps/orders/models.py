@@ -267,6 +267,9 @@ class OrderLine(models.Model):
     variant_name = models.CharField(max_length=100, blank=True)
     sku = models.CharField(max_length=100, blank=True)
     quantity = models.PositiveIntegerField(default=1)
+    # Only quantities actually deducted by checkout may be restored on cancel.
+    reserved_product_quantity = models.PositiveIntegerField(default=0)
+    reserved_variant_quantity = models.PositiveIntegerField(default=0)
     # Money, frozen. Net/VAT/gross so invoicing never recomputes from live products.
     unit_price_amount = models.PositiveIntegerField()      # gross unit
     line_total_amount = models.PositiveIntegerField()      # gross line

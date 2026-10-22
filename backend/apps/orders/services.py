@@ -1,6 +1,8 @@
 import logging
+from collections import Counter
 
 from django.core.files.base import ContentFile
+from django.core.exceptions import ValidationError
 
 from django.db import IntegrityError, transaction
 
@@ -9,6 +11,8 @@ from django.utils import timezone
 
 
 from apps.shop.pricing import quote_product
+from apps.shop.models import Product, ProductVariant
+from apps.shop.stock import validate_stock
 
 from apps.site_config.models import SiteConfig
 
@@ -199,6 +203,9 @@ def create_order_from_cart(
 
     """
 
+    # Serialize checkout of a cart and reserve inventory under row locks. Lock
+    # products/variants in a stable order so two carts cannot sell the last unit.
+    cart = Cart.objects.select_for_update().get(pk=cart.pk)
     items = list(
 
         cart.items.select_related("product", "variant", "product__vat_rate")
@@ -210,6 +217,34 @@ def create_order_from_cart(
     if not items:
 
         raise CheckoutError("Coșul este gol.")
+
+    products = {
+        p.pk: p for p in Product.objects.select_for_update().filter(
+            pk__in=[item.product_id for item in items],
+        ).order_by("pk")
+    }
+    variants = {
+        v.pk: v for v in ProductVariant.objects.select_for_update().filter(
+            pk__in=[item.variant_id for item in items],
+        ).order_by("pk")
+    }
+    product_totals = Counter()
+    variant_totals = Counter()
+    for item in items:
+        product_totals[item.product_id] += item.quantity
+        if item.variant_id:
+            variant_totals[item.variant_id] += item.quantity
+    try:
+        for item in items:
+            item.product = products[item.product_id]
+            item.variant = variants.get(item.variant_id)
+            validate_stock(
+                item.product, variant=item.variant,
+                quantity=variant_totals[item.variant_id] if item.variant_id else item.quantity,
+                product_quantity=product_totals[item.product_id],
+            )
+    except ValidationError as exc:
+        raise CheckoutError(" ".join(exc.messages)) from exc
 
 
 
@@ -273,17 +308,21 @@ def create_order_from_cart(
 
 
 
-        quote = quote_product(
+        try:
+            quote = quote_product(
+                product, variant=item.variant, selected_options=options, inputs=item.inputs,
+            )
+        except ValidationError as exc:
+            raise CheckoutError(" ".join(exc.messages)) from exc
 
-            product,
-
-            variant=item.variant,
-
-            selected_options=options,
-
-            inputs=item.inputs,
-
-        )
+        reserved_product = item.quantity if product.stock_quantity is not None else 0
+        reserved_variant = item.quantity if item.variant and item.variant.track_stock else 0
+        if reserved_product:
+            product.stock_quantity -= reserved_product
+            product.save(update_fields=["stock_quantity", "updated_at"])
+        if reserved_variant:
+            item.variant.stock_quantity -= reserved_variant
+            item.variant.save(update_fields=["stock_quantity"])
 
 
 
@@ -320,6 +359,8 @@ def create_order_from_cart(
             sku=(item.variant.sku if item.variant and item.variant.sku else product.sku or ""),
 
             quantity=item.quantity,
+            reserved_product_quantity=reserved_product,
+            reserved_variant_quantity=reserved_variant,
 
             unit_price_amount=unit_vat.gross_amount,
 
@@ -391,6 +432,8 @@ def create_order_from_cart(
 
     ])
 
+    # Consuming the cart belongs to the same transaction as reserving inventory.
+    cart.items.all().delete()
     return order
 
 

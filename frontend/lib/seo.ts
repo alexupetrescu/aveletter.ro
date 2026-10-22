@@ -71,11 +71,13 @@ export function productSchema(product: ProductDetail, config?: SiteConfigData | 
   const variant = product.variants[0];
   // Only emit a fixed offer when neither text nor options change the displayed price.
   // Configured/text quotes must never be advertised as free or as the base price.
-  const fixedPrice = !product.text_pricing && product.product_type !== "text_by_page" &&
+  const fixedPrice = product.show_price !== false && !product.text_pricing && product.product_type !== "text_by_page" &&
     product.product_type !== "custom_quote" && !product.requires_manual_approval &&
     product.option_groups.every((g) => g.options.every((o) => o.price_delta_amount === 0));
   const price = variant?.effective_price_amount ?? product.base_price_amount;
-  const availability = variant?.track_stock
+  const availability = product.availability?.status === "out_of_stock"
+    ? "OutOfStock"
+    : variant?.track_stock
     ? (variant.stock_quantity > 0 ? "InStock" : "OutOfStock")
     : product.availability?.status === "in_stock" || product.availability?.status === "limited"
       ? "InStock" : undefined;

@@ -44,6 +44,7 @@ export default function CheckoutPage() {
   }, []);
 
   const items = cart?.items ?? [];
+  const stockErrors = items.flatMap((item) => item.stock_error ? [item.stock_error] : []);
   const subtotal = cart?.subtotal_amount ?? 0;
   const shipping = siteConfig
     ? shippingAmountForSubtotal(subtotal, siteConfig)
@@ -57,6 +58,10 @@ export default function CheckoutPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!cartKey) return;
+    if (stockErrors.length) {
+      setErrors(stockErrors);
+      return;
+    }
     setSubmitting(true);
     setErrors([]);
     const fullName = `${form.first_name.trim()} ${form.last_name.trim()}`.trim();
@@ -290,15 +295,16 @@ export default function CheckoutPage() {
             className={inputClass}
           />
 
-          {errors.length > 0 && (
-            <div className="text-[13px] text-[#a03030]">
-              {errors.join(" ")}
+          {(errors.length > 0 || stockErrors.length > 0) && (
+            <div role="alert" className="text-[13px] text-[#a03030]">
+              {[...new Set([...errors, ...stockErrors])].join(" ")}
+              {stockErrors.length > 0 && <a href="/cart" className="ml-2 underline">Actualizează coșul</a>}
             </div>
           )}
 
           <button
             type="submit"
-            disabled={submitting || loading}
+            disabled={submitting || loading || stockErrors.length > 0}
             className="mt-4 cursor-pointer bg-ink px-[42px] py-4 text-xs tracking-[2px] text-paper disabled:opacity-50"
           >
             {submitting

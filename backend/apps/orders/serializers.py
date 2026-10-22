@@ -1,6 +1,8 @@
 from rest_framework import serializers
+from django.core.exceptions import ValidationError
 
 from apps.shop.serializers import asset_data
+from apps.shop.stock import validate_cart_stock
 
 from .models import Address, Cart, CartItem, CartUpload, Invoice, Order, OrderLine
 
@@ -27,6 +29,7 @@ class CartItemSerializer(serializers.ModelSerializer):
     selected_option_labels = serializers.SerializerMethodField()
     line_total_amount = serializers.SerializerMethodField()
     uploads = CartUploadSerializer(many=True, read_only=True)
+    stock_error = serializers.SerializerMethodField()
 
     class Meta:
         model = CartItem
@@ -35,8 +38,18 @@ class CartItemSerializer(serializers.ModelSerializer):
             "variant", "variant_name", "selected_option_ids",
             "selected_option_labels", "quantity", "inputs",
             "unit_price_amount", "line_total_amount", "currency",
-            "price_breakdown", "uploads",
+            "price_breakdown", "uploads", "stock_error",
         ]
+
+    def get_stock_error(self, obj):
+        try:
+            validate_cart_stock(
+                obj.cart, obj.product, variant=obj.variant, quantity=obj.quantity,
+                exclude_item_id=obj.pk,
+            )
+        except ValidationError as exc:
+            return " ".join(exc.messages)
+        return None
 
     def get_product_image(self, obj):
         return asset_data(obj.product.featured_image, self.context.get("request"))

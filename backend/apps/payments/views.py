@@ -2,6 +2,7 @@ import logging
 
 import stripe
 from django.conf import settings
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
 from rest_framework.response import Response
@@ -102,28 +103,37 @@ class CheckoutStartView(APIView):
             )
 
         try:
-            order = create_order_from_cart(
-                cart,
-                email=email,
-                phone=(request.data.get("phone") or "").strip(),
-                billing_address_data=billing_serializer.validated_data,
-                shipping_address_data=shipping_data,
-                customer_notes=(request.data.get("customer_notes") or "").strip(),
-                user=request.user if request.user and request.user.is_authenticated else None,
-            )
+            # A failed payment setup must leave the cart and inventory intact.
+            with transaction.atomic():
+                order = create_order_from_cart(
+                    cart,
+                    email=email,
+                    phone=(request.data.get("phone") or "").strip(),
+                    billing_address_data=billing_serializer.validated_data,
+                    shipping_address_data=shipping_data,
+                    customer_notes=(request.data.get("customer_notes") or "").strip(),
+                    user=request.user if request.user and request.user.is_authenticated else None,
+                )
+                if payment_method == "stripe":
+                    session = _start_stripe_payment(order, request=request)
+                else:
+                    Payment.objects.create(
+                        order=order,
+                        provider=Payment.Provider.CASH,
+                        status=Payment.Status.PENDING,
+                        amount=order.total_amount,
+                        currency=order.currency,
+                    )
         except CheckoutError as exc:
             return Response({"errors": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
-
-        cart.items.all().delete()
+        except stripe.error.StripeError:
+            logger.exception("Stripe session creation failed")
+            return Response(
+                {"errors": ["Eroare la procesatorul de plăți. Încearcă din nou."]},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
         if payment_method == "ramburs":
-            Payment.objects.create(
-                order=order,
-                provider=Payment.Provider.CASH,
-                status=Payment.Status.PENDING,
-                amount=order.total_amount,
-                currency=order.currency,
-            )
             try:
                 send_order_confirmation_email(order, payment_method="ramburs")
             except Exception:
@@ -144,15 +154,6 @@ class CheckoutStartView(APIView):
                 "shipping_amount": order.shipping_amount,
                 "total_amount": order.total_amount,
             })
-
-        try:
-            session = _start_stripe_payment(order, request=request)
-        except stripe.error.StripeError:
-            logger.exception("Stripe session creation failed for %s", order.order_number)
-            return Response(
-                {"errors": ["Eroare la procesatorul de plăți. Încearcă din nou."]},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
 
         return Response(_stripe_checkout_response(order, session))
 

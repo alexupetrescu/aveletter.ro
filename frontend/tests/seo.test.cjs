@@ -45,6 +45,7 @@ test('structured offers do not advertise text quotes, surcharges or approval-onl
   assert.equal(seo.productSchema({ ...product, product_type: 'custom_quote' }).offers, undefined);
   assert.equal(seo.productSchema({ ...product, base_price_amount: 0 }).offers, undefined);
   assert.equal(seo.productSchema({ ...product, requires_manual_approval: true }).offers, undefined);
+  assert.equal(seo.productSchema({ ...product, show_price: false }).offers, undefined);
   assert.equal(seo.productSchema({ ...product, option_groups: [{ options: [{ price_delta_amount: 500 }] }] }).offers, undefined);
 });
 
@@ -52,6 +53,14 @@ test('JSON-LD cannot close the script element with content from the CMS', () => 
   const json = seo.serializeJsonLd({ name: '</script><script>alert(1)</script>' });
   assert.ok(!json.includes('<'));
   assert.equal(JSON.parse(json).name, '</script><script>alert(1)</script>');
+});
+
+test('sold-out product stock overrides available variant stock in structured offers', () => {
+  const soldOut = { ...product, availability: { status: 'out_of_stock' },
+    variants: [{ effective_price_amount: 6500, track_stock: true, stock_quantity: 5 }] };
+  assert.equal(seo.productSchema(soldOut).offers.availability, 'https://schema.org/OutOfStock');
+  assert.equal(seo.productSchema({ ...product, availability: { status: 'limited' } }).offers.availability,
+    'https://schema.org/InStock');
 });
 
 test('pagination has distinct canonical paths and rejects malformed page numbers', () => {

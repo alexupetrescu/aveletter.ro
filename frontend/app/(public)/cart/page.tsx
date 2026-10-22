@@ -29,12 +29,15 @@ export default function CartPage() {
   const { cart, loading, updateItem, removeItem } = useCart();
   const [siteConfig, setSiteConfig] = useState<SiteConfigData | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     getSiteConfig().then(setSiteConfig).catch(() => null);
   }, []);
 
   const items = cart?.items ?? [];
+  const hasStockErrors = items.some((item) => Boolean(item.stock_error));
   const subtotal = cart?.subtotal_amount ?? 0;
   const shipping = siteConfig
     ? shippingAmountForSubtotal(subtotal, siteConfig)
@@ -43,11 +46,26 @@ export default function CartPage() {
     shipping !== null ? subtotal + shipping : null;
 
   async function handleRemove(itemId: number) {
+    setError("");
     setRemovingId(itemId);
     try {
       await removeItem(itemId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Produsul nu a putut fi eliminat.");
     } finally {
       setRemovingId(null);
+    }
+  }
+
+  async function handleQuantity(itemId: number, quantity: number) {
+    setError("");
+    setUpdatingId(itemId);
+    try {
+      await updateItem(itemId, { quantity });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Cantitatea nu a putut fi modificată.");
+    } finally {
+      setUpdatingId(null);
     }
   }
 
@@ -62,6 +80,7 @@ export default function CartPage() {
         </h1>
       </div>
 
+      {error && <p role="alert" className="mb-5 text-[13px] text-[#a03030]">{error}</p>}
       {loading ? (
         <p className="py-20 text-center text-[14.5px] text-muted">
           Se încarcă…
@@ -103,6 +122,9 @@ export default function CartPage() {
                         {item.variant_name}
                       </div>
                     )}
+                    {item.stock_error && (
+                      <p role="alert" className="my-2 text-[13px] text-[#a03030]">{item.stock_error}</p>
+                    )}
                     {item.selected_option_labels.map((opt, i) => (
                       <div key={i} className="text-[12.5px] text-muted">
                         {opt.group}: {opt.label}
@@ -141,10 +163,9 @@ export default function CartPage() {
                       <button
                         type="button"
                         onClick={() =>
-                          updateItem(item.id, {
-                            quantity: Math.max(1, item.quantity - 1),
-                          })
+                          void handleQuantity(item.id, Math.max(1, item.quantity - 1))
                         }
+                        disabled={updatingId !== null || item.quantity <= 1}
                         className="h-11 w-10 cursor-pointer text-sm"
                         aria-label="Scade cantitatea"
                       >
@@ -156,8 +177,9 @@ export default function CartPage() {
                       <button
                         type="button"
                         onClick={() =>
-                          updateItem(item.id, { quantity: item.quantity + 1 })
+                          void handleQuantity(item.id, item.quantity + 1)
                         }
+                        disabled={updatingId !== null || Boolean(item.stock_error)}
                         className="h-11 w-10 cursor-pointer text-sm"
                         aria-label="Crește cantitatea"
                       >
@@ -204,9 +226,15 @@ export default function CartPage() {
               </span>
             </div>
             <DeliveryNotice config={siteConfig} className="max-w-[360px] text-right" />
-            <FilledLink href="/checkout" className="mt-3 px-[42px]">
-              FINALIZEAZĂ COMANDA →
-            </FilledLink>
+            {hasStockErrors ? (
+              <p role="alert" className="max-w-[360px] text-right text-[13px] text-[#a03030]">
+                Actualizează cantitățile sau elimină produsele indisponibile pentru a continua.
+              </p>
+            ) : (
+              <FilledLink href="/checkout" className="mt-3 px-[42px]">
+                FINALIZEAZĂ COMANDA →
+              </FilledLink>
+            )}
           </div>
         </>
       )}

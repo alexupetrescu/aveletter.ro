@@ -415,11 +415,11 @@ export default function ProductConfigurator({
   siteConfig: SiteConfigData | null;
 }) {
   const router = useRouter();
-  const { cartKey, refresh } = useCart();
+  const { cart, cartKey, refresh } = useCart();
 
   const [activeImage, setActiveImage] = useState(0);
   const [variantId, setVariantId] = useState<number | null>(
-    product.variants[0]?.id ?? null,
+    product.variants.find((v) => !v.track_stock || v.stock_quantity > 0)?.id ?? product.variants[0]?.id ?? null,
   );
   // Preselect the first option of required single-select groups.
   const [selectedOptions, setSelectedOptions] = useState<number[]>(() =>
@@ -430,6 +430,17 @@ export default function ProductConfigurator({
   const [inputs, setInputs] = useState<Record<string, unknown>>({});
   const [files, setFiles] = useState<Record<string, File>>({});
   const [quantity, setQuantity] = useState(1);
+  const selectedVariant = product.variants.find((v) => v.id === variantId);
+  const productItems = cart?.items.filter((item) => item.product_slug === product.slug) ?? [];
+  const remainingProduct = product.stock_quantity == null ? Infinity : Math.max(0,
+    product.stock_quantity - productItems.reduce((sum, item) => sum + item.quantity, 0));
+  const remainingVariant = selectedVariant?.track_stock ? Math.max(0,
+    selectedVariant.stock_quantity - productItems.filter((item) => item.variant === variantId)
+      .reduce((sum, item) => sum + item.quantity, 0)) : Infinity;
+  const remainingStock = Math.min(remainingProduct, remainingVariant);
+  const soldOut = product.stock_quantity === 0 ||
+    Boolean(selectedVariant?.track_stock && selectedVariant.stock_quantity === 0);
+  const stockBlocked = quantity > remainingStock;
 
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [quoteErrors, setQuoteErrors] = useState<string[]>([]);
@@ -555,6 +566,10 @@ export default function ProductConfigurator({
   const handleAddToCart = useCallback(async () => {
     if (!cartKey) return;
     setSubmitAttempted(true);
+    if (stockBlocked) {
+      setAddErrors([soldOut ? "Stoc epuizat." : `Mai poți adăuga ${remainingStock} buc. în coș.`]);
+      return;
+    }
 
     const clientErrors = collectAddToCartErrors(
       product,
@@ -628,6 +643,9 @@ export default function ProductConfigurator({
     quote,
     nonFileInputs,
     quantity,
+    stockBlocked,
+    soldOut,
+    remainingStock,
     refresh,
     router,
   ]);
@@ -701,16 +719,18 @@ export default function ProductConfigurator({
         </h1>
 
         {/* PRICE — server-quoted only */}
-        <div className="mb-7 text-[22px]">
-          {priceDisplay}
-          {quoting && (
-            <span className="ml-3 text-[12px] text-stone">se calculează…</span>
-          )}
-        </div>
-        {product.product_type === "premade" && product.availability && (
+        {product.show_price !== false && (
+          <div className="mb-7 text-[22px]">
+            {priceDisplay}
+            {quoting && (
+              <span className="ml-3 text-[12px] text-stone">se calculează…</span>
+            )}
+          </div>
+        )}
+        {(product.availability || soldOut || remainingStock === 0) && (
           <div className="mb-6 -mt-4 text-[13px] text-olive">
-            {product.availability.label}
-            {product.availability.show_quantity && (
+            {soldOut ? "Stoc epuizat" : remainingStock === 0 ? "Tot stocul disponibil este în coș" : product.availability?.label}
+            {!soldOut && product.availability?.show_quantity && (
               <span className="text-muted">
                 {" "}
                 · {product.availability.quantity}{" "}
@@ -753,13 +773,15 @@ export default function ProductConfigurator({
                 <button
                   key={variant.id}
                   onClick={() => setVariantId(variant.id)}
-                  className={`cursor-pointer border px-4 py-2.5 text-[12.5px] ${
+                  disabled={variant.track_stock && variant.stock_quantity === 0}
+                  className={`cursor-pointer border px-4 py-2.5 text-[12.5px] disabled:opacity-40 disabled:cursor-not-allowed ${
                     variantId === variant.id
                       ? "border-ink bg-ink text-paper"
                       : "border-ink/20"
                   }`}
                 >
                   {variant.name}
+                  {variant.track_stock && variant.stock_quantity === 0 ? " — stoc epuizat" : ""}
                 </button>
               ))}
             </div>
@@ -816,7 +838,7 @@ export default function ProductConfigurator({
                         />
                       )}
                       {option.label}
-                      {option.price_delta_amount !== 0 && (
+                      {product.show_price !== false && option.price_delta_amount !== 0 && (
                         <span className="ml-1.5 text-[11px] opacity-70">
                           {option.price_delta_amount > 0 ? "+" : "−"}
                           {formatBani(Math.abs(option.price_delta_amount))}
@@ -892,7 +914,7 @@ export default function ProductConfigurator({
           <div className="flex items-center border border-ink/18">
             <button
               onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-              disabled={added}
+              disabled={added || quantity <= 1}
               className="h-[52px] w-11 cursor-pointer text-base disabled:opacity-40"
             >
               –
@@ -900,7 +922,7 @@ export default function ProductConfigurator({
             <div className="w-11 text-center text-sm">{quantity}</div>
             <button
               onClick={() => setQuantity((q) => q + 1)}
-              disabled={added}
+              disabled={added || quantity >= remainingStock}
               className="h-[52px] w-11 cursor-pointer text-base disabled:opacity-40"
             >
               +
@@ -908,14 +930,14 @@ export default function ProductConfigurator({
           </div>
           <button
             onClick={handleAddToCart}
-            disabled={adding || added}
+            disabled={adding || added || stockBlocked}
             className={`flex-1 cursor-pointer text-xs tracking-[2px] disabled:opacity-50 ${
               added
                 ? "bg-olive text-paper"
                 : "bg-ink text-paper"
             }`}
           >
-            {adding
+            {soldOut ? "STOC EPUIZAT" : remainingStock === 0 ? "STOCUL DISPONIBIL ESTE ÎN COȘ" : adding
               ? "SE ADAUGĂ…"
               : added
                 ? "✓ ADĂUGAT ÎN COȘ"
