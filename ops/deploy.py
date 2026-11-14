@@ -2,6 +2,7 @@
 import argparse
 import base64
 import json
+import os
 from pathlib import Path
 import re
 import shlex
@@ -14,6 +15,24 @@ ROOT = Path(__file__).resolve().parent.parent
 OPS = ROOT / "ops"
 REMOTE = "/home/alejandro/avestudio-deploy"
 SSH = ["ssh", "-F", str(OPS / "ssh.conf"), "avestudio-production"]
+
+
+def github_cli():
+    executable = shutil.which("gh")
+    if executable:
+        return executable
+    if os.name == "nt":
+        candidates = []
+        for variable in ("ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"):
+            if os.environ.get(variable):
+                candidates.append(Path(os.environ[variable]) / "GitHub CLI" / "gh.exe")
+        if os.environ.get("LOCALAPPDATA"):
+            local = Path(os.environ["LOCALAPPDATA"])
+            candidates.extend([local / "Programs/GitHub CLI/gh.exe", local / "Microsoft/WinGet/Links/gh.exe"])
+        for candidate in candidates:
+            if candidate.is_file():
+                return str(candidate)
+    raise RuntimeError("GitHub CLI was not found. Install GitHub.cli or open a new PowerShell terminal; see ops/README.md")
 
 
 def upload(name, content):
@@ -33,11 +52,10 @@ def operator(*args):
 
 
 def release(cfg, commit):
-    if not shutil.which("gh"):
-        raise RuntimeError("Install GitHub CLI and run gh auth login; see ops/README.md")
+    gh = github_cli()
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("Use a full 40-character commit SHA")
-    runs = json.loads(subprocess.check_output(["gh", "run", "list", "--repo", cfg["repository"], "--workflow", "release.yml",
+    runs = json.loads(subprocess.check_output([gh, "run", "list", "--repo", cfg["repository"], "--workflow", "release.yml",
         "--commit", commit, "--limit", "20", "--json", "databaseId,headSha,headBranch,event,conclusion"]))
     matches = [r for r in runs if r["headSha"] == commit and r["headBranch"] == "main" and r["conclusion"] == "success"
                and r["event"] in {"push", "workflow_dispatch"}]
@@ -46,7 +64,7 @@ def release(cfg, commit):
     selected = matches[0]
     cache = ROOT / ".deploy"; cache.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(dir=cache, prefix="artifact-") as temporary:
-        subprocess.run(["gh", "run", "download", str(selected["databaseId"]), "--repo", cfg["repository"],
+        subprocess.run([gh, "run", "download", str(selected["databaseId"]), "--repo", cfg["repository"],
                         "--name", "release-" + cfg["project"], "--dir", temporary], check=True)
         paths = list(Path(temporary).iterdir())
         if len(paths) != 1 or paths[0].name != "release.json" or paths[0].is_symlink() or paths[0].stat().st_size > 32768:
