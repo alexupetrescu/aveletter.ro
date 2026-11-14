@@ -24,6 +24,16 @@ def package_visibility(owner, name):
         raise
 
 
+def registry_reference(repository, tag):
+    # Inspect the registry result, not Docker's optional local RepoDigests cache.
+    value = json.loads(subprocess.check_output(["docker", "buildx", "imagetools", "inspect", tag,
+                                               "--format", "{{json .Manifest}}"] ))
+    digest = value.get("digest", "")
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+        raise RuntimeError("The registry did not return an immutable manifest digest")
+    return repository + "@" + digest
+
+
 def main():
     cfg = json.loads((ROOT / "ops/project.json").read_text())
     sha = os.environ["GITHUB_SHA"]
@@ -42,11 +52,11 @@ def main():
         repository = "ghcr.io/" + owner + "/" + name
         tag = repository + ":sha-" + sha
         subprocess.run(["docker", "push", tag], check=True)
-        digests = json.loads(subprocess.check_output(["docker", "image", "inspect", tag, "--format", "{{json .RepoDigests}}"] ))
-        matches = [d for d in digests if d.startswith(repository + "@sha256:")]
-        if len(matches) != 1 or package_visibility(owner, name) != "private":
-            raise RuntimeError("Published digest or private visibility could not be verified")
-        images[service] = matches[0]
+        visibility = package_visibility(owner, name)
+        if visibility != "private":
+            raise RuntimeError("Private package verification failed for " + name + "; reported visibility=" + str(visibility) +
+                               ". No further service images will be published.")
+        images[service] = registry_reference(repository, tag)
     manifest = {"schema": 1, "project": cfg["project"], "repository": cfg["repository"], "commit": sha,
                 "images": images, "target_ipv4": "152.228.219.231", "workflow_run_id": os.environ["GITHUB_RUN_ID"],
                 "runtime_sha256": {name: hashlib.sha256((ROOT / "ops" / name).read_bytes()).hexdigest() for name in
