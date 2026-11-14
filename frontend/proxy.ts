@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function proxy(request: NextRequest) {
   if (request.method !== "GET" && request.method !== "HEAD") return NextResponse.next();
   try {
-    const base = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8020";
+    const base = process.env.DJANGO_INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8020";
     const url = new URL("/api/blog/redirects/resolve/", base);
     url.searchParams.set("path", request.nextUrl.pathname);
     const response = await fetch(url, { signal: AbortSignal.timeout(1500) });

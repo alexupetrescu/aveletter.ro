@@ -1,5 +1,8 @@
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8020";
+  typeof window === "undefined"
+    ? process.env.DJANGO_INTERNAL_API_URL ??
+      process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8020"
+    : process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8020";
 
 const CRM = `${API_BASE}/api/crm`;
 

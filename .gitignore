@@ -20,3 +20,11 @@ docker-compose.dev.yml
 daily-dev.commands.md
 
 design/
+# GitHub release build and local deployment cache
+/.release/
+/.deploy/
+!ops/**
+
+# Local dotenv files
+.env*
+!**/.env.example
