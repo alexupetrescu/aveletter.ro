@@ -58,7 +58,7 @@ def release(cfg, commit):
     if set(value.get("images", {})) != {"backend", "frontend"}:
         raise ValueError("Incomplete image release")
     for service, image in value["images"].items():
-        if not re.fullmatch(r"ghcr\.io/alexupetrescu/" + cfg["project"] + "-" + service + r"@sha256:[0-9a-f]{64}", image):
+        if not re.fullmatch(r"ghcr\.io/alexupetrescu/" + cfg["project"] + "-production-" + service + r"@sha256:[0-9a-f]{64}", image):
             raise ValueError("Unexpected registry image reference")
     (cache / (commit + ".json")).write_bytes(content)
     upload(commit + ".json", content)

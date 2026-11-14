@@ -78,7 +78,7 @@ def manifest(path, project):
             set(value.get("images", {})) != {"frontend", "backend"}:
         raise ValueError("Release project/repository/commit differs")
     for service, reference in value["images"].items():
-        if not re.fullmatch(r"ghcr\.io/alexupetrescu/" + project + "-" + service + r"@sha256:[0-9a-f]{64}", reference):
+        if not re.fullmatch(r"ghcr\.io/alexupetrescu/" + project + "-production-" + service + r"@sha256:[0-9a-f]{64}", reference):
             raise ValueError("An image is not an immutable digest in the expected registry package")
     return value
 
@@ -365,7 +365,8 @@ def rollback(project):
 
 def install(login=False):
     destination = Path("/usr/local/sbin/avestudio-deploy")
-    atomic(destination, Path(__file__).read_bytes(), 0o755)
+    # Windows checkouts may use CRLF; the installed Linux shebang needs LF.
+    atomic(destination, Path(__file__).read_bytes().replace(b"\r\n", b"\n"), 0o755)
     STATE.mkdir(parents=True, exist_ok=True); STATE.chmod(0o700)
     config = Path("/root/.docker/config.json")
     existing = json.loads(config.read_text()).get("auths", {}) if config.exists() else {}

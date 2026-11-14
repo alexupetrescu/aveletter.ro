@@ -30,7 +30,7 @@ class ReleaseTests(unittest.TestCase):
                                        "frontend": {"image": "old-frontend"}}}
         self.active.write_text(json.dumps(self.original))
         self.release = {"schema": 1, "project": "avestudio", "repository": "alexupetrescu/avestudio", "target_ipv4": deployment.TARGET,
-                        "commit": "a" * 40, "images": {s: "ghcr.io/alexupetrescu/avestudio-" + s + "@sha256:" + "b" * 64 for s in ["backend", "frontend"]}}
+                        "commit": "a" * 40, "images": {s: "ghcr.io/alexupetrescu/avestudio-production-" + s + "@sha256:" + "b" * 64 for s in ["backend", "frontend"]}}
         self.path = self.root / "release.json"; self.path.write_text(json.dumps(self.release))
         self.patches = [patch.object(deployment, "STATE", self.state), patch.object(deployment, "APP_ROOT", self.app),
                         patch.object(deployment, "MARKERS", self.root / "markers")]
@@ -46,7 +46,8 @@ class ReleaseTests(unittest.TestCase):
     def test_manifest_requires_expected_package_digest(self):
         self.assertEqual(deployment.manifest(self.path, "avestudio")["commit"], "a" * 40)
         for image in ["ghcr.io/alexupetrescu/avestudio-backend:latest", "example.com/image@sha256:" + "b" * 64,
-                      "ghcr.io/alexupetrescu/lunador-backend@sha256:" + "b" * 64]:
+                      "ghcr.io/alexupetrescu/lunador-production-backend@sha256:" + "b" * 64,
+                      "ghcr.io/alexupetrescu/avestudio-backend@sha256:" + "b" * 64]:
             row = copy.deepcopy(self.release); row["images"]["backend"] = image
             self.path.write_text(json.dumps(row))
             with self.assertRaises(ValueError):

@@ -114,9 +114,13 @@ This installs the shared root-owned deployment helper and saves Docker's
 registry login in root's private configuration. It does not activate a release
 or restart the sites. It is needed once per VPS, not once per project.
 
-The GHCR packages are named `<project>-backend` and `<project>-frontend`
-under `alexupetrescu`. The workflow verifies private visibility before reusing
-an existing package and after publication. Keep these packages private.
+The GHCR packages are named `<project>-production-backend` and
+`<project>-production-frontend` under `alexupetrescu`. Before application
+builds, the workflow publishes a tiny marker image containing no source or
+credentials and verifies private visibility and rejected anonymous access.
+It repeats the access checks after publishing the application images.
+Keep these packages private. The original public `<project>-backend`
+packages are unused; deployment rejects their image references.
 
 When the registry token expires or is revoked, generate its replacement and
 run `python .\ops\deploy.py setup --login` from any one project folder.
