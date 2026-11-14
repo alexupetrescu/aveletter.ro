@@ -52,7 +52,8 @@ def release(cfg, commit):
         if len(paths) != 1 or paths[0].name != "release.json" or paths[0].is_symlink() or paths[0].stat().st_size > 32768:
             raise ValueError("Unexpected GitHub release artifact")
         content = paths[0].read_bytes(); value = json.loads(content)
-    if value.get("commit") != commit or value.get("repository") != cfg["repository"] or value.get("project") != cfg["project"] or \
+    if cfg.get("image_visibility") != "public" or value.get("image_visibility") != "public" or \
+            value.get("commit") != commit or value.get("repository") != cfg["repository"] or value.get("project") != cfg["project"] or \
             str(value.get("workflow_run_id")) != str(selected["databaseId"]) or value.get("target_ipv4") != "152.228.219.231":
         raise ValueError("GitHub run and release artifact differ")
     if set(value.get("images", {})) != {"backend", "frontend"}:
@@ -71,12 +72,11 @@ def main():
     parser.add_argument("--commit", help="Full release commit; defaults to this checkout's HEAD")
     parser.add_argument("--service", choices=["all", "frontend", "backend"], default="all")
     parser.add_argument("--migrate", action="store_true", help="Explicitly permit reviewed database migrations under maintenance")
-    parser.add_argument("--login", action="store_true", help="Prompt for a replacement registry read token during setup")
     args = parser.parse_args()
     cfg = json.loads((OPS / "project.json").read_text())
     if args.action == "setup":
         upload("deploy_vps.py", (OPS / "deploy_vps.py").read_bytes())
-        command = "sudo -- python3 " + shlex.quote(REMOTE + "/deploy_vps.py") + " --install" + (" --login" if args.login else "")
+        command = "sudo -- python3 " + shlex.quote(REMOTE + "/deploy_vps.py") + " --install"
         subprocess.run([*SSH[:1], "-tt", *SSH[1:], command], check=True)
     elif args.action == "rollback":
         operator("--project", cfg["project"], "--rollback")

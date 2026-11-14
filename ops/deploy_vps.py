@@ -3,7 +3,6 @@
 import argparse
 import datetime as dt
 import fcntl
-import getpass
 import hashlib
 import json
 import os
@@ -21,6 +20,8 @@ import time
 TARGET = "152.228.219.231"
 PROJECTS = {"avestudio": ("avestudio", "avestudio_db"), "aveletter": ("aveletter.ro", "aveletter"), "lunador": ("lunador.ro", "lunador")}
 STATE = Path("/var/lib/avestudio-deploy")
+INSTALL_PATH = Path("/usr/local/sbin/avestudio-deploy")
+PUBLIC_DOCKER_CONFIG = STATE / "public-registry"
 APP_ROOT = Path("/srv")
 BACKUP_STATE = Path("/var/lib/avestudio-production-backup/status.json")
 NGINX = Path("/etc/nginx/sites-available/avestudio-staging")
@@ -73,7 +74,7 @@ def manifest(path, project):
         raise ValueError("Unexpected release manifest")
     value = json.loads(path.read_text())
     repository = "alexupetrescu/" + PROJECTS[project][0]
-    if value.get("schema") != 1 or value.get("project") != project or value.get("repository") != repository or \
+    if value.get("schema") != 1 or value.get("image_visibility") != "public" or value.get("project") != project or value.get("repository") != repository or \
             value.get("target_ipv4") != TARGET or not re.fullmatch(r"[0-9a-f]{40}", value.get("commit", "")) or \
             set(value.get("images", {})) != {"frontend", "backend"}:
         raise ValueError("Release project/repository/commit differs")
@@ -253,7 +254,7 @@ def deploy(args):
             raise RuntimeError("Less than 8 GiB free before image download")
         for service in services:
             print("Downloading and checking " + project + "/" + service, flush=True)
-            run(["docker", "pull", release["images"][service]], timeout=1200)
+            run(["docker", "--config", str(PUBLIC_DOCKER_CONFIG), "pull", release["images"][service]], timeout=1200)
             image_checks(release["images"][service], release)
         before = run(compose(project, "--profile", "outbound", "config", "--no-env-resolution", "--format", "json")).stdout
         value = desired_config(project, release, services, before)
@@ -363,27 +364,18 @@ def rollback(project):
         print("ROLLED BACK images for " + project + "; current database/media retained")
 
 
-def install(login=False):
-    destination = Path("/usr/local/sbin/avestudio-deploy")
+def install():
     # Windows checkouts may use CRLF; the installed Linux shebang needs LF.
-    atomic(destination, Path(__file__).read_bytes().replace(b"\r\n", b"\n"), 0o755)
+    atomic(INSTALL_PATH, Path(__file__).read_bytes().replace(b"\r\n", b"\n"), 0o755)
     STATE.mkdir(parents=True, exist_ok=True); STATE.chmod(0o700)
-    config = Path("/root/.docker/config.json")
-    existing = json.loads(config.read_text()).get("auths", {}) if config.exists() else {}
-    if login or "ghcr.io" not in existing:
-        token = getpass.getpass("GitHub classic token with read:packages only (not saved in logs): ")
-        if not token:
-            raise ValueError("A registry read token is required")
-        run(["docker", "login", "ghcr.io", "--username", "alexupetrescu", "--password-stdin"], data=token.encode())
-    if config.exists():
-        config.chmod(0o600)
-    print("DEPLOYMENT HELPER INSTALLED. Registry login saved privately for root; production images are unchanged.")
+    PUBLIC_DOCKER_CONFIG.mkdir(parents=True, exist_ok=True); PUBLIC_DOCKER_CONFIG.chmod(0o700)
+    atomic(PUBLIC_DOCKER_CONFIG / "config.json", '{"auths":{}}\n')
+    print("DEPLOYMENT HELPER INSTALLED. Public images need no registry token; production images are unchanged.")
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--install", action="store_true")
-    parser.add_argument("--login", action="store_true")
     parser.add_argument("--project", choices=list(PROJECTS))
     parser.add_argument("--release")
     parser.add_argument("--plan", action="store_true")
@@ -398,7 +390,7 @@ def main():
         signal.signal(number, interrupted)
     os.umask(0o077)
     if args.install:
-        install(args.login)
+        install()
     elif args.project and args.rollback:
         rollback(args.project)
     elif args.project and args.release:

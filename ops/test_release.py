@@ -29,7 +29,7 @@ class ReleaseTests(unittest.TestCase):
         self.original = {"services": {"backend": {"image": "old-backend", "volumes": ["/srv/avestudio/shared/media:/app/media"]},
                                        "frontend": {"image": "old-frontend"}}}
         self.active.write_text(json.dumps(self.original))
-        self.release = {"schema": 1, "project": "avestudio", "repository": "alexupetrescu/avestudio", "target_ipv4": deployment.TARGET,
+        self.release = {"schema": 1, "image_visibility": "public", "project": "avestudio", "repository": "alexupetrescu/avestudio", "target_ipv4": deployment.TARGET,
                         "commit": "a" * 40, "images": {s: "ghcr.io/alexupetrescu/avestudio-production-" + s + "@sha256:" + "b" * 64 for s in ["backend", "frontend"]}}
         self.path = self.root / "release.json"; self.path.write_text(json.dumps(self.release))
         self.patches = [patch.object(deployment, "STATE", self.state), patch.object(deployment, "APP_ROOT", self.app),
@@ -52,6 +52,19 @@ class ReleaseTests(unittest.TestCase):
             self.path.write_text(json.dumps(row))
             with self.assertRaises(ValueError):
                 deployment.manifest(self.path, "avestudio")
+
+    def test_installer_stores_no_registry_credentials_and_normalizes_shebang(self):
+        destination = self.root / "installed-helper"
+        source = self.root / "windows-helper.py";source.write_bytes(b'#!/usr/bin/python3\r\nprint("fixture")\r\n')
+        config = self.state / "public-registry"
+        with patch.object(deployment, "INSTALL_PATH", destination), patch.object(deployment, "PUBLIC_DOCKER_CONFIG", config), \
+                patch.object(deployment, "__file__", str(source)), patch.object(deployment, "run") as run:
+            deployment.install()
+            run.assert_not_called()
+        self.assertEqual(json.loads((config / "config.json").read_text()), {"auths": {}})
+        self.assertNotIn(b"\r", destination.read_bytes())
+        self.assertEqual(destination.stat().st_mode & 0o777, 0o755)
+        self.assertEqual(config.stat().st_mode & 0o777, 0o700)
 
     def test_worker_and_backend_updated_together_and_mounts_preserved(self):
         row = {"services": {"backend": {"image": "old", "env_file": [{"path": "/private.env", "format": "raw"}], "volumes": ["/srv/media:/app/media"]},

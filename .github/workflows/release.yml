@@ -32,7 +32,7 @@ jobs:
           python3 ops/test_release.py
           python3 ops/test_publish.py
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-      - name: Verify private registry destinations using source-free markers
+      - name: Verify public registry destinations using source-free markers
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -72,7 +72,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=aveletter-frontend
       - name: Test frontend HTTP, JavaScript and native image library
         run: python3 ops/ci.py frontend ghcr.io/alexupetrescu/aveletter-production-frontend:sha-${{ github.sha }}
-      - name: Publish private images and release manifest
+      - name: Publish public images and release manifest
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

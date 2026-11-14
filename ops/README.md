@@ -39,7 +39,7 @@ gh api user --jq .login
 ```
 
 The CLI needs `workflow` to push workflow files. CI publishes with its
-temporary `GITHUB_TOKEN`; the VPS gets a separate read-only package token.
+temporary `GITHUB_TOKEN`; the VPS pulls public images without a package token.
 Stripe, Drive, mailbox passwords and VPS SSH/sudo credentials are not GitHub
 Actions secrets and are not build inputs.
 
@@ -50,7 +50,12 @@ for static generation is down, the build can fail while the current release
 keeps running. Application and frontend integration tests use disposable data
 and an isolated database instead of the production database.
 
-## Publish the prepared setup
+## Initial setup (already completed on this PC)
+
+The initial setup and its fixes have already been committed and pushed in
+all three repositories. Use the deployment and everyday-update sections
+below. The `publish_setup.py` bootstrap instructions in this section are
+retained for reference; do not rerun that initial inventory after normal edits.
 
 Run in each local project directory. For example:
 
@@ -95,35 +100,37 @@ tests but does not publish images. If GitHub asks to enable Actions, enable
 the repository's Actions workflows. No automatic production deployment is
 configured.
 
-## Configure VPS registry access once, for all three projects
+## Install the VPS deployment helper once, for all three projects
 
-Create a **personal access token (classic)** with **`read:packages` only**:
-
-https://github.com/settings/tokens/new?scopes=read:packages&description=avestudio-vps-pull
-
-Choose an expiry you can track. Copy the token privately; do not put it in a
-command, `.env`, Git, chat or a screenshot. The next command opens SSH and
-prompts in that terminal for your VPS sudo password, then for this token:
+The application images are public, as approved for these public source
+repositories. No personal access token or registry login is needed on the
+VPS. This command opens SSH and prompts only for your VPS sudo password:
 
 ```powershell
 Set-Location D:\Web\avestudio
 python .\ops\deploy.py setup
 ```
 
-This installs the shared root-owned deployment helper and saves Docker's
-registry login in root's private configuration. It does not activate a release
+This installs the shared root-owned deployment helper and creates an empty
+Docker configuration for anonymous image pulls. It does not activate a release
 or restart the sites. It is needed once per VPS, not once per project.
 
 The GHCR packages are named `<project>-production-backend` and
 `<project>-production-frontend` under `alexupetrescu`. Before application
 builds, the workflow publishes a tiny marker image containing no source or
-credentials and verifies private visibility and rejected anonymous access.
-It repeats the access checks after publishing the application images.
-Keep these packages private. The original public `<project>-backend`
+credentials and verifies public visibility and anonymous manifest access.
+It repeats the checks after publishing and requires the anonymous manifest
+hash to equal the registry's published digest. Release manifests explicitly
+record `image_visibility: public`. The original `<project>-backend`
 packages are unused; deployment rejects their image references.
 
-When the registry token expires or is revoked, generate its replacement and
-run `python .\ops\deploy.py setup --login` from any one project folder.
+Each project's `ops/project.json` explicitly approves public images. The
+workflow also verifies that the source repository remains public. Changing
+the repository to private stops publication; review image visibility before
+publishing private source. Runtime `.env` files, Stripe/Drive credentials,
+database backups, customer media and mailbox contents are excluded from
+build contexts. Public source/dependencies and published website content
+are included. Re-run `setup` once when updating the shared deployment helper.
 
 ## First production release
 
