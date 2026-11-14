@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async rewrites() {
+    const target = process.env.DJANGO_API_PROXY_TARGET;
+    return target
+      ? [{ source: "/media/:path*", destination: `${target}/media/:path*` }]
+      : [];
+  },
   async headers() {
     return ["/crm/:path*", "/cart/:path*", "/checkout/:path*"].map((source) => ({
       source,
